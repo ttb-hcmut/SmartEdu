@@ -1,0 +1,11 @@
+data/
+import/
+logs/
+plugins/
+__pycache__/
+*.pyc
+.vscode/
+.env
+
+
+test/

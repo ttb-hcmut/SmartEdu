@@ -1,0 +1,57 @@
+services:
+  neo4j:
+    image: neo4j:2025.12.1-enterprise
+    container_name: neo4j-core
+    ports:
+      - "7474:7474" # HTTP Browser
+      - "7687:7687" # Bolt Protocol
+    environment:
+      # --- LICENSE (FOR ENTERPRISE) ---
+      - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
+      
+      # Auth
+      - NEO4J_AUTH=neo4j/graph123
+      
+      # Plugins
+      - NEO4J_PLUGINS=["apoc", "graph-data-science"]
+      
+      # Security & Config (APOC/GDS)
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*,gds.*
+      - NEO4J_dbms_security_procedures_allowlist=apoc.*,gds.*
+      - NEO4J_apoc_import_file_enabled=true
+      - NEO4J_apoc_export_file_enabled=true
+      - NEO4J_apoc_uuid_enabled=true
+      
+      # Memory Optimization
+      - NEO4J_server_memory_pagecache_size=1G
+      - NEO4J_server_memory_heap_initial__size=1G
+      - NEO4J_server_memory_heap_max__size=2G
+      
+      # Network Configuration
+      - NEO4J_server_default__listen__address=0.0.0.0
+      - NEO4J_server_default__advertised__address=neo4j-core
+
+    volumes:
+      - ./data:/data
+      - ./logs:/logs
+      - ./import:/var/lib/neo4j/import
+      - ./plugins:/plugins
+    restart: unless-stopped
+    
+    # Healthcheck
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider localhost:7474 || exit 1"]
+      interval: 15s  
+      timeout: 15s        
+      retries: 20         
+      start_period: 15s   
+
+  neodash:
+    image: neo4jlabs/neodash:latest
+    container_name: neodash
+    ports:
+      - "5005:5005"
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    restart: unless-stopped
