@@ -28,6 +28,7 @@ dependencies = [
     "networkx>=3.6.1",
     "pyvis>=0.3.2",
     "docling>=2.70.0",
+    "neo4j-graphrag>=1.12.0",
 ]
 [[tool.uv.index]]
 name = "pytorch-cu124"

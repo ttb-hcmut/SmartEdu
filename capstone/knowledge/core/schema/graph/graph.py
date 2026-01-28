@@ -13,7 +13,7 @@ class Cluster(BaseModel):
     label: str
     type: ClusterType
     
-    anchor_node: Optional[Dict[str, str]] = Field(default=None, description="Name and ID of the TopicNode governing this cluster")
+    anchor_node: Optional[str] = Field(default=None, description="Name and ID of the TopicNode governing this cluster")
     
     centroid: Optional[List[float]] = None
     member_ids: List[str] = Field(default_factory=list) 
@@ -22,7 +22,7 @@ class Cluster(BaseModel):
 
 # --- KG MODEL ---
 
-class GlobalKG(BaseModel):
+class KG_Instance(BaseModel):
     nodes: Dict[str, EduNode] = Field(default_factory=dict)
     edges: Dict[Tuple[str, str, str], EduEdge] = Field(default_factory=dict)
     clusters: Dict[str, Cluster] = Field(default_factory=dict)

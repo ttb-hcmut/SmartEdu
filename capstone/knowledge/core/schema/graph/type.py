@@ -14,10 +14,9 @@ class BaseNode(BaseModel):
     id : str = ""
     name: str
     content: str = ""
-    hard_ref: Optional[Ref]
+    hard_ref: Optional[Ref] = None
     weight: float = 1.0
     soft_ref: List[Ref] = Field(default_factory=list)
-    metadata: Optional[Dict[str, str] ]= Field(default_factory=dict) 
     synonyms: List[str] = Field(default_factory=list)
 
 
@@ -31,8 +30,9 @@ class RhetoricalRole(str, Enum):
     SOLUTION = "Solution"           
     PROOF = "Proof"                 
     
-    STATEMENT = "Statement"
+    APPPLICATION = "Application"
     EXPERIMENT = "Experiment"  
+    STATEMENT = "Statement"
 
 class NodeType(str, Enum):
     COMMUNITY = "Community"

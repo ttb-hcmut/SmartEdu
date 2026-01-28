@@ -12,7 +12,7 @@ class RhetoricalItem(BaseModel):
     confidence: int = Field(default=3, ge=1, le=1)
 
 class ConceptBundle(BaseModel):
-    name: str = Field(..., description="Comcept (Ex: Linear Regression)")
+    name: str = Field(..., description="Comcept described by 3 word max (Ex: Linear Regression)")
     details: List[RhetoricalItem] = Field(default_factory=list)
 
 class RelationEdge(BaseModel):

@@ -16,10 +16,11 @@ class ConceptNode(BaseNode):
 # [FIX]: Kế thừa BaseNode để có ID và validate được trong Union
 
 class RhetoricalNode(BaseNode):
+    concept_id : str
     typeNode: Literal[NodeType.RHETORICAL] = NodeType.RHETORICAL
     rrole: RhetoricalRole
-    content: str = Field(..., description="Nội dung chi tiết (Markdown/Latex)")
-    score: int = Field(default=0, description="Dùng cho thuật toán Pruning (Top-K)")
+    content: str = Field(..., description="Detailed content")
+    score: int = Field(default=0, description="Pruning ")
 
 EduNode = Union[ConceptNode, TopicNode, CommunityNode, RhetoricalNode]
 
@@ -28,22 +29,10 @@ class EduEdge(BaseModel):
     target: EduNode
     
     name: str = Field(default="") 
-    
+    type : str = Field(default="") 
     weight: float = 1.0
     hard_ref: Optional[str] = None 
     soft_ref: Optional[str] = None
 
-    @model_validator(mode='after')
-    def validate_topology_and_name(self):
-        s = self.source
-        t = self.target
-        
-        if isinstance(s, RhetoricalNode):
-            self.name = f"{t.rrole.value.upper()}_ref_{t.name}"
-
-        if isinstance(t, RhetoricalNode):
-            self.name = f"{s.name}-{t.rrole.value.upper()}"
-            
-        return self
-
+    
 
