@@ -8,6 +8,7 @@ class Ref(BaseModel):
     id: str
     name: str
     summary : str = ""
+    p_num : Tuple[int, int] = (1, 1)  
 
 
 class BaseNode(BaseModel):
@@ -22,7 +23,6 @@ class BaseNode(BaseModel):
 
 
 class RhetoricalRole(str, Enum):
-    DEFINITION = "Definition"       
     FORMULA = "Formula"
     OBJECTIVE = "Objective"
     
@@ -30,9 +30,11 @@ class RhetoricalRole(str, Enum):
     SOLUTION = "Solution"           
     PROOF = "Proof"                 
     
-    APPPLICATION = "Application"
+    APPLICATION = "Application"
     EXPERIMENT = "Experiment"  
     STATEMENT = "Statement"
+
+    QUIZ = "Quiz"
 
 class NodeType(str, Enum):
     COMMUNITY = "Community"
@@ -40,6 +42,11 @@ class NodeType(str, Enum):
     CONCEPT = "Concept"
     RHETORICAL = "Rhetorical"
 
+
+class EdgeType(str, Enum):
+    PART_OF = "PART_OF"
+    
+    
 
 
 

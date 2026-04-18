@@ -1,0 +1,18 @@
+name: capstone-repo
+
+include:
+  - path: ./graph/neo4j.yaml
+  - path: ./sql/mysql.yml
+  - path: ./nosql/mongo.yml
+  - path: ./milvus_db/milvus.yml
+networks:
+  shared-network:
+    driver: bridge
+
+volumes:
+  neo4j_data:
+  mysql_data:
+  mongo_data:
+  minio_data:    
+  etcd_data:    
+  milvus_data:

@@ -1,137 +1,126 @@
-
-from knowledge.repo.graph.test.doc import DOC
-
-# Package import
-## LLM based package
-from langchain_ollama import OllamaLLM
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import PydanticOutputParser
-from langchain_core.runnables import RunnableLambda
-
-## Util package
 import json
-from typing import Tuple, List, Union
 from time import time
+from typing import Tuple, List, Union, Dict
 
+from core.schema.graph.type import Ref
+from core.schema.factory import SkeletonStructure, RelationStructure, AnchorLinkStructure
+from knowledge.engine.graph.graph_constructor import KG_Handler
 
-# Project component import
-## 1. Graph
-from knowledge.core.schema.graph import EduNode, EduEdge, KG_Instance ### Schema, the blueprint of Graph Design
-from knowledge.core.schema.factory import SkeletonStructure, RelationStructure ### Graph Literature holder, a simple holder for LLM to handle
-from knowledge.engine.graph.graph_constructor import KG_Handler ### Graph engine
+from core.llm.prompt.graph import prompt_p0, prompt_p1, prompt_p2, TEXTBOOK_EXTRACTION_PROMPT
+from core.llm.llm_engine import CoreLLMEngine
+from langchain_core.output_parsers import PydanticOutputParser, StrOutputParser
 
+class GraphExtractionService:
+    def __init__(self, llm_engine: CoreLLMEngine, test: bool = False):
+        self.llm_engine = llm_engine
+        self.parser_p1 = PydanticOutputParser(pydantic_object=SkeletonStructure)
+        self.parser_p2 = PydanticOutputParser(pydantic_object=RelationStructure)
+        self.parser_links = PydanticOutputParser(pydantic_object=AnchorLinkStructure)
+        self.kg_handler = KG_Handler()
+        self.test = test
 
-def graph_const(texts: Union[str, List, Tuple[str, str]]):
-    # Set up model
-    MODEL_NAME = "gpt-oss:120b-cloud"  
-    llm = OllamaLLM(
-        model=MODEL_NAME, 
-        temperature=0.0,
-        num_ctx=8192
-    )
-    # I. Output Graph Literature
-    ## Step 1: Output the tree of Concept --> Rheto as the Skeleton 
-    parser_p1 = PydanticOutputParser(pydantic_object=SkeletonStructure)
-    
-    
-    prompt_p1 = ChatPromptTemplate.from_template(
-        """
-        You Are an Expert Builder of Computer Science Knowledge graph. Your Mission
-        Extract Concept Bundles using STRICT VERBATIM content (no summarizing).
-        ### RULES:
-        - Concept names short be short (4 words max)
-        - Concept should be domain special
-
-        ### ROLE CLASSIFICATION (Strictly match these Enums):
-        - **Definition**: Core meaning/What is it?
-        - **Formula**: Equations, Math, Logic.
-        - **Objective**: Goal, Purpose, or Target.
-        - **Problem**: Limitation, Risk, Failure, Trade-off.
-        - **Solution**: Method/Strategy to fix a problem.
-        - **Proof**: Derivation, Logical deduction.
-        - **Experiment**: Data, Setup, Empirical results.
-        - **Application**: Real life application.
-        - **Statement**: General facts, assertions (fallback category).
-
-        ### PRIORITY:
-        - Negative consequence -> **Problem**.
-        - Goal/Aim -> **Objective**.
-        - Derivation -> **Proof**.
-        - Experimental details -> **Experiment**.
-
-        TEXT:
-        {text}
+    def extract_and_build(self, 
+                         texts: List[Tuple[str, str]], 
+                         course_name: str = "General Course",
+                         save: str =  "kg_new.json", 
+                         hard_ref: List[Ref] = None, 
+                         soft_refs: List[Ref] = None):
         
-        {format_instructions}"""
-    )
-    
-    chain_p1 = prompt_p1 | llm | parser_p1
+        for i, (topic_name, text) in enumerate(iterable=texts):
+            start: float = time()
+            raw_name = topic_name
+            topic_name: str = self.llm_engine.invoke_with_retry(
+                prompt_template=prompt_p0,
+                parser=StrOutputParser(),
+                input_data={
+                "raw_name": raw_name,
+                "text_content": text[:100]
+                },
+                profile_name="worker"
+            )
 
-    ## Step 2: From tree, strengthen into graph via Concept <--> Concept 
-    parser_p2 = PydanticOutputParser(pydantic_object=RelationStructure)
-    prompt_p2 = ChatPromptTemplate.from_template(
-        """Identify relationships (IS_A, PART_OF, RELATED_TO, CAUSES) between concepts.
-        STRICT CONSTRAINT: Only create edges between concepts found in this list: {concept_list}
-        Do not invent new nodes.
+            print(f"Old: {raw_name}, new: {topic_name}")
+            print(f"Finish in {time()-start} s")
+            p1_result: SkeletonStructure = self.llm_engine.invoke_with_retry(
+                prompt_template=prompt_p1,
+                parser=self.parser_p1,
+                input_data={
+                    "text": f"Topic: {topic_name} \n{text}",
+                    "course": course_name,
+                    "format_instructions": self.parser_p1.get_format_instructions()
+                },
+                profile_name="deep"
+            )
+
+            if not p1_result:
+                continue
+
+            extracted_concepts: List[str] = [b.name for b in p1_result.tree]
+
+            p2_result: RelationStructure = self.llm_engine.invoke_with_retry(
+                prompt_template=prompt_p2,
+                parser=self.parser_p2,
+                input_data={
+                    "text": text,
+                    "concept_list": ", ".join(extracted_concepts),
+                    "format_instructions": self.parser_p2.get_format_instructions()
+                },
+                profile_name="deep"
+            )
+
+            if not p2_result:
+                continue
+
+            if save:
+                literature_union = {
+                    "og": text,
+                    "meta": {
+                        "model": self.llm_engine.config.profiles["deep"].model_name,
+                        "concept_count": len(extracted_concepts),
+                        "relation_count": len(p2_result.edges)
+                    },
+                    "skeleton_phase": p1_result.model_dump(),
+                    "relation_phase": p2_result.model_dump()
+                }
+                with open(f"test/graph_const/graph_lit_{i}.json", "w", encoding="utf-8") as f:
+                    json.dump(literature_union, f, indent=2, ensure_ascii=False)
+            
+            self.kg_handler.build(
+                p1_result, 
+                p2_result, 
+                topic_name=topic_name, 
+                course_name=course_name,
+                hard_ref=hard_ref[i] if hard_ref else None, 
+                soft_refs=soft_refs[i] if soft_refs else None
+            )
+            print(f"Finish topic {topic_name} in {time() - start} seconds")
+        if save:
+            self.kg_handler.save_json(name=save)
+            #self.kg_handler.visualize_kg()
+
+        return self.kg_handler.kg
+
+    def link_textbook_to_anchors(self, text: str, candidates: List[Dict]) -> List[Dict]:
+        formatted_candidates = "\n".join(
+            [f"- ID: {c['id']} | Name: {c.get('name', 'N/A')}" for c in candidates]
+        )
         
-        TEXT:
-        {text}
-        
-        {format_instructions}"""
-    )
-    chain_p2 = prompt_p2 | llm | parser_p2
-
-    
-    kg_handler = KG_Handler()
-    start = time()
-    print("================ Step 1: Graph Literature bulding block ================")
-    for i, text in enumerate(texts):
-        print(f">>>>>> SubGraph {i} <<<<<<<<")
-        start_g = time()
-        p1_result : SkeletonStructure = chain_p1.invoke({
-            "text": text,
-            "format_instructions": parser_p1.get_format_instructions()
-        })
-
-        extracted_concepts = [b.name for b in p1_result.tree]
-
-        p2_result : RelationStructure = chain_p2.invoke({
-            "text": text,
-            "concept_list": ", ".join(extracted_concepts),
-            "format_instructions": parser_p2.get_format_instructions()
-        })
-        
-
-        literature_union = {
-            "og": text,
-            "meta": {
-                "model": MODEL_NAME,
-                "concept_count": len(extracted_concepts),
-                "relation_count": len(p2_result.edges)
+        result: AnchorLinkStructure = self.llm_engine.invoke_with_retry(
+            prompt_template=TEXTBOOK_EXTRACTION_PROMPT,
+            parser=self.parser_links,
+            input_data={
+                "text": text,
+                "candidates": formatted_candidates,
+                "format_instructions": self.parser_links.get_format_instructions()
             },
-            "skeleton_phase": p1_result.model_dump(),
-            "relation_phase": p2_result.model_dump()
-        }
-
-        print("Taken time: ", time() - start_g)
-        ### Save result
-        with open(f"test/graph_lit_{i}.json", "w", encoding="utf-8") as f:
-            json.dump(literature_union, f, indent=2, ensure_ascii=False)
+            profile_name="deep"
+        )
         
-        # II. Graph Literature (Semantic Info) + Graph Blueprint (Structure Info) ==> Full Graph DataStructure
-        
-        kg_handler.build(p1_result, p2_result, topic_name="Machine Learning")
-    mid = time()
-    print(f"Finish Graph takes {mid - start}")
-    kg_handler.save_json()
-    kg_handler.visualize_kg()
+        if not result or not result.links:
+            return []
 
-    end = time()
-    print(f"Visualize takes {end-mid}")
-
-    return kg_handler.kg
-
-
-        
-
-
+        valid_ids = {c['id'] for c in candidates}
+        return [
+            link.model_dump() for link in result.links 
+            if link.anchor_id in valid_ids
+        ]

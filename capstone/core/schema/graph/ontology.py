@@ -1,7 +1,7 @@
 from typing import List, Optional, Tuple, Dict, Union, Literal
 from pydantic import BaseModel, Field, model_validator
 
-from knowledge.core.schema.graph.type import * # --- NODE MODELS ---
+from core.schema.graph.type import * # --- NODE MODELS ---
 
 class TopicNode(BaseNode):
     typeNode: Literal[NodeType.TOPIC] = NodeType.TOPIC
@@ -19,8 +19,8 @@ class RhetoricalNode(BaseNode):
     concept_id : str
     typeNode: Literal[NodeType.RHETORICAL] = NodeType.RHETORICAL
     rrole: RhetoricalRole
-    content: str = Field(..., description="Detailed content")
-    score: int = Field(default=0, description="Pruning ")
+    content: str = Field(..., description="Detailed content.")
+    score: float = Field(default=0, description="Pruning ")
 
 EduNode = Union[ConceptNode, TopicNode, CommunityNode, RhetoricalNode]
 

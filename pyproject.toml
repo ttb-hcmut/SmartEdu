@@ -20,7 +20,6 @@ dependencies = [
     "langchain-ollama>=1.0.1",
     "langchain-core>=1.2.5",
     "en-core-web-sm",
-    "lightrag-hku>=1.4.9.10",
     "moderngl>=5.12.0",
     "imgui-bundle>=1.92.5",
     "pyglm>=2.8.3",
@@ -29,6 +28,8 @@ dependencies = [
     "pyvis>=0.3.2",
     "docling>=2.70.0",
     "neo4j-graphrag>=1.12.0",
+    "langchain>=1.2.10",
+    "aiohttp>=3.13.3",
 ]
 [[tool.uv.index]]
 name = "pytorch-cu124"

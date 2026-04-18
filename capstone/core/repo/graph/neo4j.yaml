@@ -1,5 +1,5 @@
 services:
-  neo4j:
+  neo4j-core:
     image: neo4j:2025.12.1-enterprise
     container_name: neo4j-core
     ports:
@@ -30,28 +30,25 @@ services:
       # Network Configuration
       - NEO4J_server_default__listen__address=0.0.0.0
       - NEO4J_server_default__advertised__address=neo4j-core
-
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    networks:
+      - capstone-net
     volumes:
       - ./data:/data
       - ./logs:/logs
       - ./import:/var/lib/neo4j/import
       - ./plugins:/plugins
     restart: unless-stopped
-    
-    # Healthcheck
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider localhost:7474 || exit 1"]
       interval: 15s  
-      timeout: 15s        
+      timeout: 15s         
       retries: 20         
       start_period: 15s   
 
-  neodash:
-    image: neo4jlabs/neodash:latest
-    container_name: neodash
-    ports:
-      - "5005:5005"
-    depends_on:
-      neo4j:
-        condition: service_healthy
-    restart: unless-stopped
+networks:
+  capstone-net:
+    external: true

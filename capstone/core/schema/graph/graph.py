@@ -1,6 +1,6 @@
 from typing import List, Optional, Tuple, Dict, Union, Literal, ClassVar
 from pydantic import BaseModel, Field
-from knowledge.core.schema.graph.ontology import * # --- CORE ONTOLOGY TO CONSTRUCT GRAPH ---
+from core.schema.graph.ontology import * # --- CORE ONTOLOGY TO CONSTRUCT GRAPH ---
 
 class ClusterType(str, Enum):
     SOURCE = "Source"       # Toàn bộ tài liệu

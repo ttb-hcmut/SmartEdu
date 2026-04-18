@@ -1,0 +1,22 @@
+services:
+  mongo-core:
+    image: mongo:latest
+    container_name: mongo-core
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password123
+    command: mongod --wiredTigerCacheSizeGB 1.0
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    networks:
+      - capstone-net
+    volumes:
+      - mongo_data:/data/db
+
+networks:
+  capstone-net:
+    external: true

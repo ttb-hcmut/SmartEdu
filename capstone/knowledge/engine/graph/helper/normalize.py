@@ -3,6 +3,7 @@ import aiohttp
 import time
 import os
 import spacy
+import re
 
 # --- CONFIGURATION ---
 USER_AGENT = "EduCapstoneBot/1.0 (dev_mode@student.edu)"
@@ -48,12 +49,18 @@ def load_filter_keywords(filepath):
     except Exception:
         pass
     return keywords
+def invalid_word(text: str) -> bool:
+        if re.search(r'\d{3,}', text): return True
+        if len(text) < 2: return True
+        return False
 
-def nlp_normalize(text: str) -> str:
+def nlp_normalize(text: str, doc = None) -> str:
     """
-    Làm sạch chuỗi input: Bỏ mạo từ, tính từ chung, đưa về số ít.
+    Cleaning concepts for subsequence insertion and Wikidata search, avoiding duplication of different writing withy the same concept.
     """
-    doc = nlp(text)
+    if invalid_word(text):
+        return ""
+    doc = doc or nlp(text)
     clean_tokens = []
     
     for token in doc:
@@ -72,7 +79,8 @@ def nlp_normalize(text: str) -> str:
             clean_tokens.append(token.text)
             
     result = " ".join(clean_tokens)
-    return result if result.strip() else text
+
+    return result.title() if result.strip() else text.title()
 
 # --- 3. ASYNC WORKER ---
 async def _fetch_single(session, semaphore, search_text, filter_keywords):
@@ -85,7 +93,7 @@ async def _fetch_single(session, semaphore, search_text, filter_keywords):
         "limit": 5,
         "type": "item"
     }
-    
+    article =["article", "journal", "publication", "thesis", "paper"]
     async with semaphore:
         try:
             async with session.get(API_URL, params=params) as response:
@@ -97,28 +105,31 @@ async def _fetch_single(session, semaphore, search_text, filter_keywords):
                 
                 if not candidates:
                     return search_text, {"id": None, "error": "Not found", "used_query": search_text}
-
+                in_case = None
                 for cand in candidates:
                     desc = cand.get("description", "").lower()
                     if any(kw in desc for kw in filter_keywords):
+                        if any(lk in desc for lk in article):
+                            if in_case is None:
+                                in_case = search_text,{
+                            "id": cand["id"],
+                            "label": cand["label"],
+                            "desc": cand.get("description", ""),
+                            "status": "MATCH"}
+                                
                         return search_text, {
                             "id": cand["id"],
                             "label": cand["label"],
                             "desc": cand.get("description", ""),
                             "status": "MATCH"}
-                
-                top_cand = candidates[0]
-                return search_text, {
-                    "id": top_cand["id"],
-                    "label": top_cand["label"],
-                    "desc": top_cand.get("description", ""),
-                    "status": "FALLBACK"
-                }
+                if in_case:
+                    return in_case
+                return search_text, {"id": None, "error": "No semantic match within filter keywords"}
                     
         except Exception as e:
             return search_text, {"id": None, "error": str(e)}
 
-async def wiki_resolver(queries: list, filter_filepath: str, concurrency: int = None) -> dict:
+async def wiki_resolver(queries: list, filter_filepath: str =SUBJECT_FILE , concurrency: int = None) -> dict:
     filter_keywords = load_filter_keywords(filter_filepath)
     if concurrency is None:
         concurrency = LIMIT

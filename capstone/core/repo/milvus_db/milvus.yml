@@ -1,0 +1,91 @@
+services:
+  # --- Object Storage ---
+  minio:
+    image: minio/minio:latest
+    container_name: minio-core
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - capstone-net
+    volumes:
+      - minio_data:/data
+
+  # --- Milvus Metadata Store ---
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    container_name: milvus-etcd
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      # Hardware related
+      - ETCD_AUTO_COMPACTION_RETENTION=1
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296 ## Dangerous
+      - ETCD_SNAPSHOT_COUNT=50000
+
+      - ALLOW_NONE_AUTHENTICATION=yes
+      - ETCD_ADVERTISE_CLIENT_URLS=http://milvus-etcd:2379
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - capstone-net
+    volumes:
+      - etcd_data:/etcd
+
+  # --- Milvus Standalone ---
+  milvus-standalone:
+    image: milvusdb/milvus:v2.4.0
+    container_name: milvus-core
+    command: ["milvus", "run", "standalone"]
+    environment:
+      - ETCD_ENDPOINTS=milvus-etcd:2379 
+      - MINIO_ADDRESS=minio-core:9000   
+      - ETCD_ROOT_PATH=by-dev
+
+      # Shit code will be fixed , Im too lazy now
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=password123
+      - MILVUS_MINIO_ACCESS_KEY=admin
+      - MILVUS_MINIO_SECRET_KEY=password123
+      - MINIO_BUCKET_NAME=a-bucket
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    depends_on:
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 2.5G
+    networks:
+      - capstone-net
+    volumes:
+      - milvus_data:/var/lib/milvus
+
+networks:
+  capstone-net:
+    external: true
+
+volumes:
+  minio_data:
+  etcd_data:
+  milvus_data:

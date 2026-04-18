@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 """High fidelity visualization utilities for KG_Instance."""
-""" This code is the reimplementation of KG-Gen Vissualization to match our custom schema
-Source code: https://github.com/stair-lab/kg-gen/blob/main/src/kg_gen/utils/visualize_kg.py
 
-I would appreciate if you can star the source code
+""" 
+This code is the reimplementation of KG-Gen Visualization to match our custom schema
+Source code: https://github.com/stair-lab/kg-gen/blob/main/src/kg_gen/utils/visualize_kg.py
 """
 
 import hashlib
@@ -15,7 +15,7 @@ from collections import Counter, defaultdict, deque
 from pathlib import Path
 from typing import Any, Iterable
 
-from knowledge.core.schema.graph import KG_Instance, EduNode, EduEdge, NodeType
+from core.schema.graph import KG_Instance, EduNode, EduEdge, NodeType
 
 def _string_to_color(label: str) -> str:
     """Generate a deterministic pastel-like color for a given label."""
@@ -281,7 +281,7 @@ def visualize(
         "display: block; /* Visible in standalone mode */",
     )
 
-    destination = Path(output_path or "test/kg_dashboard.html").resolve()
+    destination = Path(output_path or "test/graph_const/kg_dashboard.html").resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(html, encoding="utf-8")
 
