@@ -1,0 +1,50 @@
+\section{Multimodal Classification with CLIP}
+
+\subsection{Abstract}
+This study investigates the application of the CLIP (Contrastive Language–Image Pretraining) model for multimodal classification of fashion products by leveraging both image and textual information. A classification head is added on top of pretrained representations to improve performance. The work compares zero-shot performance against few-shot and fine-tuned approaches.
+% \cite{radford2021clip, fewshot2020}.
+
+\subsection{Dataset and Preprocessing}
+The dataset consists of 44,072 samples, each containing an image, a product name, and a category label spanning 45 classes. The class distribution is highly imbalanced, with categories such as \textit{Topwear} dominating the dataset, which may impact model generalization.
+
+Data preprocessing involves validating samples, encoding labels, and splitting the dataset into training, validation, and test sets. Raw input text and image are processed by CLIP built-in processor. Pretrained encoders are used to extract embeddings, avoiding the need for training from scratch and significantly reducing computational cost.
+
+\subsection{Baseline: Zero-Shot and Few-Shot Classification}
+The baseline approach uses the pretrained CLIP model without additional training. Image and text embeddings are combined and compared with label embeddings derived from textual class names. This zero-shot setup achieves moderate performance, with approximately 61.6\% accuracy and 0.66 weighted F1 score, while few-shot achieves approximately 69\% accuracy and 0.74 weighted F1 score. Despite the large capacity of the model, this result indicates that pretrained representations alone are insufficient for accurate classification in this domain.
+
+\subsection{Proposed Method}
+To improve performance, a lightweight extension model is introduced. The approach freezes the pretrained CLIP encoders and adds a small trainable module consisting of:
+\begin{itemize}
+    \item An attention mechanism to combine image and text embeddings
+    \item A set of learnable \textit{free tokens} to enhance feature interaction
+    \item A linear classification head for final prediction
+\end{itemize}
+
+This design enables the model to learn the relative importance of image and text modalities while keeping the number of trainable parameters low (approximately 1 million).
+
+\subsection{Training Strategy}
+The model is trained using cross-entropy loss with an adaptive optimizer and learning rate scheduler. Early stopping is applied based on validation loss to prevent overfitting. Training converges quickly, with both training and validation losses decreasing significantly within a few epochs, demonstrating efficient learning.
+
+\subsection{Few-Shot classifcation}
+Few-shot classification is evaluated by constructing class embeddings from training samples and performing similarity-based prediction. This approach achieves approximately 98\% accuracy, slightly lower than the fully trained model. The result suggests that simple averaging of embeddings is less effective than model itself learning importance combination of embeddings.
+
+\subsection{Results}
+The proposed method significantly outperforms the baseline:
+\begin{itemize}
+    \item Zero-shot baseline: $\sim$61.6\% accuracy, 0.66 F1 score
+    \item Few-shot baseline: $\sim$69\% accuracy, 0.74 F1 score
+    \item Fine-tuned model zero-shot: $\sim$99\% accuracy and F1 score
+    \item Fine-tuned few-shot: $\sim$98\% accuracy
+\end{itemize}
+
+These results demonstrate that even a lightweight extension can substantially enhance CLIP's performance on domain-specific classification tasks.
+
+\subsection{Analysis and Interpretation}
+Attention visualization shows that textual features contribute more strongly to classification decisions than image features, while the learnable free tokens have minimal impact. This suggests that product names contain highly discriminative information in this dataset. The attention mechanism effectively learns modality importance, leading to improved performance.
+
+\subsection{Conclusion}
+This work demonstrates that while CLIP provides a strong zero-shot baseline, its performance can be dramatically improved through lightweight fine-tuning. The addition of an attention-based classification head enables effective multimodal feature fusion, resulting in near-perfect accuracy. In contrast, few-shot methods relying on static embeddings are less effective. These findings highlight the importance of learnable adaptation for multimodal tasks. For more information, please visit:
+\begin{itemize}
+    \item Github: https://github.com/hoang-nguyenk22/CS-DeepLearning/blob/patch-1/assignment1.md
+    \item Colab: https://colab.research.google.com/drive/1MZ20ccSe01mQEzUmACtCrHNOD3TC0ga4?usp=sharing
+\end{itemize}

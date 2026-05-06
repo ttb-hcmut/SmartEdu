@@ -1,0 +1,12 @@
+\thispagestyle {empty}
+\babel@toc {english}{}\relax 
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {2.1}{\ignorespaces Naive Bayes. Calculate probability of next token given n previous tokens using chain rule}}{4}{figure.caption.9}%
+\contentsline {figure}{\numberline {2.2}{\ignorespaces Illustration of general RNN model. Basically a statistical accumulation of previous tokens to output probaility of next token with back propagation}}{4}{figure.caption.10}%
+\contentsline {figure}{\numberline {2.3}{\ignorespaces LSTM with forget gate}}{4}{figure.caption.11}%
+\contentsline {figure}{\numberline {2.4}{\ignorespaces Basic Single Agent diagram}}{5}{figure.caption.12}%
+\contentsline {figure}{\numberline {2.5}{\ignorespaces Comparison of Microservice and Monolyth architecture}}{9}{figure.caption.17}%
+\contentsline {figure}{\numberline {2.6}{\ignorespaces ReAct Virtual DOM; Source: GeeksforGeeks}}{10}{figure.caption.20}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }

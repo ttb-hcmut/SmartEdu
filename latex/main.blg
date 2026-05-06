@@ -1,0 +1,52 @@
+This is BibTeX, Version 0.99e
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
+The top-level auxiliary file: main.aux
+Reallocating 'name_of_file' (item size: 1) to 6 items.
+The style file: plain.bst
+Reallocating 'name_of_file' (item size: 1) to 11 items.
+Database file #1: References.bib
+Warning--I didn't find a database entry for "SemanticCollapse"
+Warning--I didn't find a database entry for "EduKGPipeline"
+Warning--I didn't find a database entry for "EfficientGraphRAG"
+You've used 16 entries,
+            2118 wiz_defined-function locations,
+            595 strings with 7657 characters,
+and the built_in function-call counts, 5874 in all, are:
+= -- 504
+> -- 467
+< -- 1
++ -- 184
+- -- 168
+* -- 433
+:= -- 1055
+add.period$ -- 48
+call.type$ -- 16
+change.case$ -- 131
+chr.to.int$ -- 0
+cite$ -- 16
+duplicate$ -- 187
+empty$ -- 357
+format.name$ -- 168
+if$ -- 1157
+int.to.chr$ -- 0
+int.to.str$ -- 16
+missing$ -- 15
+newline$ -- 82
+num.names$ -- 32
+pop$ -- 159
+preamble$ -- 1
+purify$ -- 115
+quote$ -- 0
+skip$ -- 130
+stack$ -- 0
+substring$ -- 120
+swap$ -- 31
+text.length$ -- 1
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 62
+warning$ -- 0
+while$ -- 35
+width$ -- 18
+write$ -- 165
+(There were 3 warnings)

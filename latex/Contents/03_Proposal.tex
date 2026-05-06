@@ -1,0 +1,41 @@
+\chapter{Proposed System and Methodology}
+
+\subsection{Design Pattern}
+\subsubsection{Definition}
+Design patterns are common solutions to problems that often appear in software design. They work like blueprints that developers can adapt to solve issues in their own programs.
+Unlike ready-made functions or libraries that can be copied directly into code, a design pattern is not a specific piece of code. Instead, it describes a general way to solve a problem, and developers must adjust it to fit their project.
+
+Design patterns are sometimes confused with algorithms because both deal with solving problems. However, an algorithm gives a clear list of steps to follow to reach a goal, while a design pattern is a broader idea that shows how a solution might be structured. As a result, even when applying the same design pattern, the actual code might look different in different programs.
+
+
+\subsubsection{Design Pattern in React}
+In developing modern React applications, employing well-established design patterns can greatly enhance code maintainability, scalability, and clarity. Below are some of the React design patterns integrated into our project to ensure a clean and modular architecture:
+
+\begin{enumerate}
+    \item \textbf{Container and presentation patterns} \\
+In our project, we adopted the container and presentation component pattern to clearly separate concerns between data handling and UI rendering. This design pattern splits components into two distinct roles:
+
+\textbf{Container Components:} These are responsible for managing data, application logic, and side effects such as API calls or subscriptions. They typically use state hooks (useState, useReducer) and lifecycle hooks (useEffect) to fetch and manipulate data. They do not concern themselves with how the data is displayed.
+
+\textbf{Presentation Components:} These components are stateless and purely focused on the visual representation of data. They receive data and callbacks as props from their container counterparts and render UI accordingly. This makes them highly reusable and easy to test, as they don't rely on external data sources or internal state.
+
+
+
+\item \textbf{Component Composition with Hooks} \\
+Component composition is a fundamental concept in React, and we extended this principle by integrating it with Hooks to create modular and reusable behavior. Instead of repeating logic across components, we encapsulated shared functionality in custom hooks, such as useFormHandler, useAuth, and useProductFilter.
+
+This approach allowed us to reuse logic across multiple components without duplicating code. Rather than deeply nesting logic or passing down props through multiple layers, hooks provided direct access to logic within each component that needed it. Similar to the container/presentation pattern, hooks helped keep logic out of the UI layer, making components simpler and more focused on rendering.
+
+
+\end{enumerate}
+
+\subsubsection{MVC Design Pattern in FastAPI}
+While FastAPI does not enforce a traditional MVC (Model-View-Controller) architecture, it naturally supports a similar separation of concerns that aligns closely with MVC principles. In FastAPI-based applications, developers typically structure their code into models, routers (or controllers), and views or schemas, creating a clean modular architecture that promotes maintainability, scalability, and clarity.
+
+FastAPI's models are commonly implemented using Pydantic and an ORM (such as SQLAlchemy), where they define the structure, validation rules, and constraints for the application's data. These models represent the domain entities and handle interactions with the database layer. By isolating data logic in dedicated model components, FastAPI applications maintain a clear boundary between data representation and business logic.
+
+The controller-like functionality in FastAPI is handled by the routing layer. Routers group related endpoints and define how the application responds to incoming HTTP requests. They coordinate the flow of data between models and services, ensuring that input is validated, business rules are applied, and appropriate responses are returned. FastAPI's dependency injection system further enhances the design by allowing controllers to remain lightweight and focused solely on request handling.
+
+Finally, views in a FastAPI context typically correspond to Pydantic schemas used for request and response serialization. These schemas ensure that the data returned to clients follows a consistent and well-defined structure. Because schemas are separate from models, FastAPI applications can control exactly what data is exposed externally, improving both security and maintainability.
+
+Together, this model-router-schema structure achieves the core goals of the MVC pattern: a clean separation of concerns, improved testability, and a codebase that is easier to adapt and extend. Although the framework does not require a strict MVC layout, FastAPI's design naturally supports these architectural principles, making it well suited for both small-scale APIs and complex, enterprise-grade back-end systems.
