@@ -236,9 +236,11 @@ def analyze(skeleton: SkeletonStructure, relations: RelationStructure) -> Tuple[
             name_mapping[original_name] = node_data["name"]
             
             p_data = get_or_create_concept(act["parent"], "General Concept")
+            relationship1: str = "Source concept is a subtopic of the target concept"
+            relationship2: str = "Source concept is estimately the foundation and root to the target concept"
             if p_data:
-                new_e.append(RelationEdge(src=node_data["name"], tgt=p_data["name"], name=act["relation_fwd"]))
-                new_e.append(RelationEdge(src=p_data["name"], tgt=node_data["name"], name=act["relation_rev"]))
+                new_e.append(RelationEdge(src=node_data["name"], tgt=p_data["name"], name=act["relation_fwd"], rel = relationship1))
+                new_e.append(RelationEdge(src=p_data["name"], tgt=node_data["name"], name=act["relation_rev"], rel =relationship2))
 
         else:
             node_data = get_or_create_concept(act["clean_self"], act["content"])

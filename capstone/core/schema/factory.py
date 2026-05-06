@@ -20,6 +20,7 @@ class RelationEdge(BaseModel):
     name: str
     src: str
     tgt: str
+    rel: str = Field(..., description="Relationship between source and target")
 
 class SkeletonStructure(BaseModel): # Phase 1
     tree: List[ConceptBundle]

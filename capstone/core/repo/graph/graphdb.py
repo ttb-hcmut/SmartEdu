@@ -1,12 +1,14 @@
 import os
 from typing import List, Dict, Optional
 from neo4j import GraphDatabase
-from core.config import *
 from time import time
+
+from core.config import Neo
 class GraphDB:
     def __init__(self, config: Neo = Neo):
         self.driver = GraphDatabase.driver(config.uri, auth=config.auth)
-        self.setup_databases(["ref", "test", "final"])
+        self.db_name = config.db_name
+        self.setup_databases([self.db_name])
 
         self.config =config
 
@@ -36,7 +38,9 @@ class GraphDB:
             session.run(f"CREATE OR REPLACE DATABASE {db_name} WAIT")
         self.create_constraints(db_name)
 
-    def import_data(self, db_name: str =DB_NAME, nodes: List[Dict] = [], edges: List[Dict]= [], clusters: List[Dict]= []):
+    def import_data(self, db_name: str =None, nodes: List[Dict] = [], edges: List[Dict]= [], clusters: List[Dict]= []):
+        if db_name == None:
+            db_name = self.db_name
         start = time()
         with self.driver.session(database=db_name) as session:
             if nodes:
@@ -117,3 +121,61 @@ class GraphDB:
         db_name = self.config.db_name
         with self.driver.session(database=db_name) as session:
                     session.run(q,param)
+
+    def get_learning_graph(self, student_id: str = None) -> Dict:
+        query = """
+        MATCH (n:Entity)
+        WHERE n.rrole IS NULL
+        OPTIONAL MATCH (n)-[r]->(m:Entity)
+        WHERE type(r) <> 'CONTENT'
+        WITH n, count(r) AS out_degree
+        OPTIONAL MATCH (n)-[:BELONGS_TO|PART_OF*1..2]->(c:Entity)
+        WHERE c.typeNode = 'Community'
+        OPTIONAL MATCH (s:Student {id: $sid})-[mas:MASTERY]->(n)
+        RETURN n.name AS name, 
+               n.typeNode AS type, 
+               c.name AS course_name,
+               out_degree,
+               substring(coalesce(n.content, ''), 0, 50) AS description,
+               coalesce(mas.level, 0) AS mastery
+        """
+        results = self.run_query(self.db_name, query, {"sid": student_id or ""})
+        return {"nodes": results}
+
+    def update_learn(self, student_id: str, current_pos, new_node) -> None:
+        if not new_node or not student_id:
+            return
+
+        mastery_query = """
+        MERGE (s:Student {id: $sid})
+        MERGE (n:Entity {name: $new_name})
+        MERGE (s)-[r:MASTERY]->(n)
+        SET r.level = CASE WHEN coalesce(r.level, 0) < 6 THEN coalesce(r.level, 0) + 1 ELSE 6 END,
+            r.last_visited = datetime()
+        """
+        self.query(mastery_query, {"sid": student_id, "new_name": new_node.name})
+
+        if current_pos:
+            transition_query = """
+            MERGE (s:Student {id: $sid})
+            WITH s
+            MATCH (curr:Entity {name: $curr_name}), (next:Entity {name: $new_name})
+            MERGE (s)-[r:LEARNED_PATH]->(next)
+            SET r.from_node = $curr_name,
+                r.count = coalesce(r.count, 0) + 1,
+                r.last_visited = datetime()
+            """
+            self.query(transition_query, {
+                "sid": student_id,
+                "curr_name": current_pos.name,
+                "new_name": new_node.name
+            })
+
+    def get_mastery(self, student_id: str, node_name: str) -> int:
+        query = """
+        MATCH (s:Student {id: $sid})-[r:MASTERY]->(n:Entity {name: $name})
+        RETURN coalesce(r.level, 0) AS mastery
+        """
+        with self.driver.session(database=self.db_name) as session:
+            result = session.run(query, sid=student_id, name=node_name).single()
+            return result["mastery"] if result else 0

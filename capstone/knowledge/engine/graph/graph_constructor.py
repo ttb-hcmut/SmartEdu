@@ -70,13 +70,14 @@ class KG_Handler:
                 if topic_cluster:
                     self._add_to_cluster(topic_cluster, rhet_node, mode=0)
                 
-                self._create_edge(src=concept_node, tgt=rhet_node, name=detail.role.value.upper())
+                self._create_edge(src=concept_node, tgt=rhet_node, name=detail.role.value.upper(), content="This concept contains this knowledge")
 
         for rel in relations.edges:
             src_node = self.node_cache.get(rel.src.lower())
             tgt_node = self.node_cache.get(rel.tgt.lower())
+            content = rel.rel
             if src_node and tgt_node:
-                self._create_edge(src=src_node, tgt=tgt_node, name=rel.name)
+                self._create_edge(src=src_node, tgt=tgt_node, name=rel.name, content=content)
 
         return self.kg
 
@@ -88,7 +89,7 @@ class KG_Handler:
             node = TopicNode(id=t_id, name=topic_name, content=f"Topic: {topic_name}", typeNode=NodeType.TOPIC)
             self.kg.nodes[node.id] = node
             self.node_cache[topic_name.lower()] = node
-            self._create_edge(src=node, tgt=root_community, name="PART_OF")
+            self._create_edge(src=node, tgt=root_community, name="PART_OF", content = "Source concept is essentially a part of target topic")
 
         if c_id not in self.kg.clusters:
             self.kg.clusters[c_id] = Cluster(id=c_id, label=topic_name, type=ClusterType.TOPIC, anchor_node=t_id)
@@ -127,19 +128,19 @@ class KG_Handler:
             typeNode=NodeType.RHETORICAL
         )
 
-    def _create_edge(self, src: EduNode, tgt: EduNode, name: str):
+    def _create_edge(self, src: EduNode, tgt: EduNode, name: str, content: str = ""):
         if src.id == tgt.id: return
         typ = edge_type(src, tgt)
         edge_key = (src.id, tgt.id, typ)
         if edge_key not in self.kg.edges:
-            self.kg.edges[edge_key] = EduEdge(source=src, target=tgt, name=name, type=typ)
+            self.kg.edges[edge_key] = EduEdge(source=src, target=tgt, name=name, type=typ, relationship=content  )
 
     def _add_to_cluster(self, cluster: Cluster, node: EduNode, mode = 0):
         if node.id not in cluster.member_ids:
             cluster.member_ids.append(node.id)
         if mode == 1 and cluster.anchor_node and node.id != cluster.anchor_node:
             anchor_node = self.kg.nodes[cluster.anchor_node]
-            self._create_edge(src=node, tgt=anchor_node, name="BELONGS_TO")
+            self._create_edge(src=node, tgt=anchor_node, name="BELONGS_TO", content = "Source concept is estimately the foundation and root to the target concept")
 
     def save_json(self, name: str = "kg.json"):
         data = self.kg.model_dump(exclude_none=True, exclude_defaults=True)

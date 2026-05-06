@@ -10,7 +10,7 @@ from knowledge.service.course_ingest import CourseIngestionService
 from knowledge.knowledge_construction_service import KnowledgeModule
 
 
-from TA.ta_module import TAModule, TA_service
+from TA.ta_module import TAModule
 
 
 # Legacy code, new update gather it under 1 module
@@ -44,7 +44,4 @@ def get_ingestion_service(module: KnowledgeModule  = Depends(get_knowledge_modul
 
 def get_TA_module(request: Request) ->TAModule:
     return request.app.state.TA
-
-def get_TA(module: TAModule  = Depends(get_TA_module)) -> TA_service:
-    return module.get_ta_service()
 

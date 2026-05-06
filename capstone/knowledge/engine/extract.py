@@ -113,7 +113,7 @@ class GraphExtractionService:
                 "candidates": formatted_candidates,
                 "format_instructions": self.parser_links.get_format_instructions()
             },
-            profile_name="deep"
+            profile_name="graph"
         )
         
         if not result or not result.links:

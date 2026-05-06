@@ -12,12 +12,13 @@ from core.schema.graph.type import Ref
 import re
 from core.config import PAGE_PER_PDF
 
-def extract_pdf(file_path: str, pages_per_batch: int = PAGE_PER_PDF, step: int = int(PAGE_PER_PDF/3*2+1)) -> List[dict]:
+def extract_pdf(file_path: str, pages_per_batch: int = 15, step = None) -> List[dict]:
     start = time()
     converter = DocumentConverter()
     result = converter.convert(file_path)
     doc = result.document
-    
+    if step is None:
+        step: int = int(pages_per_batch/3*2+1)
     with open(file_path, "rb") as f:
         file_hash = hashlib.md5(f.read()).hexdigest()
     doc_name = os.path.splitext(os.path.basename(file_path))[0]

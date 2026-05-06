@@ -59,10 +59,10 @@ services:
       - ETCD_ROOT_PATH=by-dev
 
       # Shit code will be fixed , Im too lazy now
-      - MINIO_ACCESS_KEY=admin
-      - MINIO_SECRET_KEY=password123
-      - MILVUS_MINIO_ACCESS_KEY=admin
-      - MILVUS_MINIO_SECRET_KEY=password123
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MILVUS_MINIO_ACCESS_KEY=minioadmin
+      - MILVUS_MINIO_SECRET_KEY=minioadmin
       - MINIO_BUCKET_NAME=a-bucket
     ports:
       - "19530:19530"
@@ -80,6 +80,22 @@ services:
       - capstone-net
     volumes:
       - milvus_data:/var/lib/milvus
+  attu:
+    image: zilliz/attu:latest
+    container_name: milvus-attu
+    ports:
+      - "8000:3000" # http://localhost:8000
+    environment:
+      - MILVUS_URL=milvus-core:19530
+    networks:
+      - capstone-net
+    depends_on:
+      milvus-standalone:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
 networks:
   capstone-net:

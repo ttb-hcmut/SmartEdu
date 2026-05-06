@@ -32,6 +32,7 @@ def serialize_kg_to_dict(graph: KG_Instance) -> Tuple[List[Dict], List[Dict], Li
         src_name = id_to_name.get(src_id)
         tgt_name = id_to_name.get(tgt_id)
         
+        relationship = edge_data.relationship
         if not src_name or not tgt_name:
             continue
             
@@ -41,6 +42,7 @@ def serialize_kg_to_dict(graph: KG_Instance) -> Tuple[List[Dict], List[Dict], Li
             "source_name": src_name,
             "target_name": tgt_name,
             "type": rel_type,
+            "relationship":relationship,
             "props": edge_props
         })
 

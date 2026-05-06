@@ -13,7 +13,6 @@ class CommunityNode(BaseNode):
 class ConceptNode(BaseNode):
     typeNode: Literal[NodeType.CONCEPT] = NodeType.CONCEPT
     content : str =""
-# [FIX]: Kế thừa BaseNode để có ID và validate được trong Union
 
 class RhetoricalNode(BaseNode):
     concept_id : str
@@ -27,7 +26,7 @@ EduNode = Union[ConceptNode, TopicNode, CommunityNode, RhetoricalNode]
 class EduEdge(BaseModel):
     source: EduNode
     target: EduNode
-    
+    relationship: str = ""
     name: str = Field(default="") 
     type : str = Field(default="") 
     weight: float = 1.0

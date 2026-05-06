@@ -1,0 +1,304 @@
+from typing import Type, Optional
+from pydantic import BaseModel
+from langchain_core.runnables import RunnableConfig
+from TA.tools.neo.base import NeoTool
+from TA.tools.neo.schema import (
+    RecommendInput, BackboneInput, RelevanceInput, OptimalPathInput,
+    BackboneOutput, HubConnection, RelevanceOutput, ConceptNode
+)
+
+
+class RecommendNew(NeoTool):
+    name: str = "recommend_new"
+    description: str = (
+        "Find the most connected concept nodes in the knowledge graph. "
+        "Returns top hub nodes ranked by semantic out-degree (number of non-CONTENT relationships). "
+        "Use this when a student has no current position and needs a starting point."
+    )
+    args_schema: Type[BaseModel] = RecommendInput
+
+    def _run(self, course_filter: str = None, from_node: str = None, max_results: int = 10, config: RunnableConfig = None):
+        student_id = (config or {}).get("configurable", {}).get("student_id", "")
+        print(f"Run {self.name} | course_filter={course_filter}, from_node={from_node}, max={max_results}")
+
+        if from_node:
+            cypher = """
+            MATCH (src:Entity {name: $from_node})-[r]->(m:Entity)
+            WHERE type(r) <> 'CONTENT' AND m.rrole IS NULL
+            OPTIONAL MATCH (m)-[r2]->(other:Entity)
+            WHERE type(r2) <> 'CONTENT' AND other.rrole IS NULL
+            WITH m, count(r2) AS semantic_out_degree
+            ORDER BY semantic_out_degree DESC
+            LIMIT $max_results
+            OPTIONAL MATCH (m)-[:BELONGS_TO|PART_OF*1..2]->(c:Entity)
+            WHERE c.typeNode = 'Community'
+            RETURN m.name AS name, m.content AS content,
+                   m.typeNode AS type, semantic_out_degree AS out_degree,
+                   c.name AS course_name
+            """
+            params = {"from_node": from_node, "max_results": max_results}
+        elif course_filter:
+            cypher = """
+            MATCH (course:Entity {name: $course_filter})
+            MATCH (n:Entity)-[:BELONGS_TO|PART_OF*1..2]->(course)
+            WHERE n.rrole IS NULL AND n.id <> course.id
+            OPTIONAL MATCH (n)-[r]->(m:Entity)
+            WHERE type(r) <> 'CONTENT' AND m.rrole IS NULL
+            WITH n, course, count(r) AS semantic_out_degree
+            ORDER BY semantic_out_degree DESC
+            LIMIT $max_results
+            RETURN n.name AS name, n.content AS content, 
+                   n.typeNode AS type, semantic_out_degree AS out_degree,
+                   course.name AS course_name
+            """
+            params = {"course_filter": course_filter, "max_results": max_results}
+        else:
+            cypher = """
+            MATCH (n:Entity)
+            WHERE n.rrole IS NULL
+            OPTIONAL MATCH (n)-[r]->(m:Entity)
+            WHERE type(r) <> 'CONTENT' AND m.rrole IS NULL
+            WITH n, count(r) AS semantic_out_degree
+            ORDER BY semantic_out_degree DESC
+            LIMIT $max_results
+            OPTIONAL MATCH (n)-[:BELONGS_TO|PART_OF*1..2]->(c:Entity)
+            WHERE c.typeNode = 'Community'
+            RETURN n.name AS name, n.content AS content, 
+                   n.typeNode AS type, semantic_out_degree AS out_degree,
+                   c.name AS course_name
+            """
+            params = {"max_results": max_results}
+
+        results = self.run_query(query=cypher, params=params)
+        print(f"RecommendNew results: {len(results)} nodes")
+
+        if not results:
+            return "INFO: No concept nodes found in knowledge graph."
+
+        nodes = []
+        for r in results:
+            mastery = 0
+            if self.tracker and student_id:
+                mastery = self.tracker.get_mastery(student_id, r['name'])
+            node = ConceptNode(
+                name=r['name'],
+                type=r.get('type', ''),
+                course_name=r.get('course_name', ''),
+                out_degree=r.get('out_degree', 0),
+                description=r['content'][:50] if r.get('content') else '', 
+                mastery=mastery
+            )
+            nodes.append(node)
+
+        mode_label = f"NEIGHBORS of '{from_node}'" if from_node else f"TOP {len(nodes)} HUB CONCEPTS"
+        lines = [f"{mode_label} (by connectivity):"]
+        for i, n in enumerate(nodes, 1):
+            lines.append(
+                f"{i}. [{n.type}] {n.name} "
+                f"| course: {n.course_name or 'N/A'} "
+                f"| connections: {n.out_degree} "
+                f"| mastery: {n.mastery} "
+                f"| {n.description or 'N/A'}"
+            )
+        return "\n".join(lines)
+
+    async def _arun(self, course_filter: str = None, from_node: str = None, max_results: int = 10, config: RunnableConfig = None):
+        return self._run(course_filter, from_node, max_results, config)
+
+
+class CourseBackbone(NeoTool):
+    name: str = "course_backbone"
+    description: str = (
+        "Extract the 'backbone' (skeletal structure) of a course by finding its top hub concept nodes "
+        "and the relationships between them. Returns hub nodes ranked by out-degree plus a connectivity map "
+        "showing how hubs relate to each other. Use this to understand a course's core structure for roadmap planning."
+    )
+    args_schema: Type[BaseModel] = BackboneInput
+
+    def _run(self, course_name: str, max_hubs: int = 15, config: RunnableConfig = None):
+        student_id = (config or {}).get("configurable", {}).get("student_id", "")
+        print(f"Run {self.name} | course={course_name}, max_hubs={max_hubs}")
+
+        hub_cypher = """
+        MATCH (course:Entity {name: $course_name})
+        MATCH (n:Entity)-[:BELONGS_TO|PART_OF*1..2]->(course)
+        WHERE n.rrole IS NULL AND n.id <> course.id
+        OPTIONAL MATCH (n)-[r]->(m:Entity)
+        WHERE type(r) <> 'CONTENT' AND m.rrole IS NULL
+        WITH n, course, count(r) AS out_degree
+        ORDER BY out_degree DESC
+        LIMIT $max_hubs
+        RETURN n.id AS id, n.name AS name, n.content AS content,
+               n.typeNode AS type, out_degree, course.name AS course_name
+        """
+        hubs = self.run_query(query=hub_cypher, params={
+            "course_name": course_name, "max_hubs": max_hubs
+        })
+        
+        if not hubs:
+            return f"INFO: No concept nodes found for course '{course_name}'."
+
+        hub_ids = [h['id'] for h in hubs]
+        hub_nodes = []
+        for h in hubs:
+            mastery = 0
+            if self.tracker and student_id:
+                mastery = self.tracker.get_mastery(student_id, h['name'])
+            hub_nodes.append(ConceptNode(
+                name=h['name'],
+                type=h.get('type', ''),
+                course_name=h.get('course_name', course_name),
+                out_degree=h.get('out_degree', 0),
+                description=f"{h['content'][:100]}..." if h.get('content') else '',
+                mastery=mastery
+            ))
+
+        rel_cypher = """
+        UNWIND $hub_ids AS h1_id
+        UNWIND $hub_ids AS h2_id
+        WITH h1_id, h2_id WHERE h1_id < h2_id
+        MATCH (h1:Entity {id: h1_id})-[r]-(h2:Entity {id: h2_id})
+        WHERE type(r) <> 'CONTENT'
+        RETURN h1.name AS from_node, h2.name AS to_node, type(r) AS relationship,
+               CASE WHEN startNode(r) = h1 THEN 'FORWARD' ELSE 'REVERSE' END AS direction
+        """
+        rels = self.run_query(query=rel_cypher, params={"hub_ids": hub_ids})
+
+        connections = [HubConnection(**r) for r in rels] if rels else []
+
+        lines = [f"BACKBONE of '{course_name}' ({len(hub_nodes)} hub nodes):"]
+        lines.append("")
+        lines.append("HUB NODES:")
+        for i, h in enumerate(hub_nodes, 1):
+            lines.append(f"  {i}. [{h.type}] {h.name} | degree: {h.out_degree} | mastery: {h.mastery} | {h.description or 'N/A'}")
+
+        if connections:
+            lines.append("")
+            lines.append("CONNECTIONS BETWEEN HUBS:")
+            for c in connections:
+                arrow = "->" if c.direction == 'FORWARD' else "<-"
+                lines.append(f"  {c.from_node} {arrow}[{c.relationship}]{arrow} {c.to_node}")
+
+        return "\n".join(lines)
+
+    async def _arun(self, course_name: str, max_hubs: int = 10, config: RunnableConfig = None):
+        return self._run(course_name, max_hubs, config)
+
+
+class CourseRelevance(NeoTool):
+    name: str = "course_relevance"
+    description: str = (
+        "Find which other courses are most relevant to a target course by counting how many "
+        "hub nodes (high out-degree concepts) from other courses point into the target course's hub nodes. "
+        "Returns a compact summary of related courses ranked by overlap strength. "
+        "Use this to identify prerequisite courses or cross-course dependencies."
+    )
+    args_schema: Type[BaseModel] = RelevanceInput
+
+    def _run(self, target_course: str, min_degree: int = 3):
+        print(f"Run {self.name} | target={target_course}, min_degree={min_degree}")
+
+        cypher = """
+        MATCH (target_course:Entity {name: $target_course})
+        MATCH (inner:Entity)-[:BELONGS_TO|PART_OF*1..2]->(target_course)
+        WHERE inner.rrole IS NULL
+
+        OPTIONAL MATCH (inner)-[ri]->(mi:Entity)
+        WHERE type(ri) <> 'CONTENT' AND mi.rrole IS NULL
+        WITH target_course, inner, count(ri) AS inner_degree
+        WHERE inner_degree >= $min_degree
+
+        MATCH (outer:Entity)-[r]->(inner)
+        WHERE outer.rrole IS NULL AND type(r) <> 'CONTENT'
+          AND NOT (outer)-[:BELONGS_TO|PART_OF*1..2]->(target_course)
+
+        OPTIONAL MATCH (outer)-[ro]->(mo:Entity)
+        WHERE type(ro) <> 'CONTENT' AND mo.rrole IS NULL
+        WITH target_course, inner, outer, count(ro) AS outer_degree
+        WHERE outer_degree >= $min_degree
+
+        OPTIONAL MATCH (outer)-[:BELONGS_TO|PART_OF*1..2]->(other_course:Entity)
+        WHERE other_course.typeNode = 'Community'
+
+        RETURN other_course.name AS related_course,
+               count(DISTINCT outer) AS hub_overlap,
+               collect(DISTINCT outer.name)[..3] AS key_concepts
+        ORDER BY hub_overlap DESC
+        LIMIT 10
+        """
+        results = self.run_query(query=cypher, params={
+            "target_course": target_course, 
+            "min_degree": min_degree
+        })
+
+        if not results or not any(r['related_course'] for r in results):
+            return f"INFO: No significant cross-course dependencies found for '{target_course}'."
+
+        lines = [f"COURSE DEPENDENCIES for '{target_course}':"]
+        for r in results:
+            if not r['related_course']:
+                continue
+            concepts = ", ".join(r['key_concepts']) if r['key_concepts'] else "N/A"
+            lines.append(f"  {r['related_course']}: {r['hub_overlap']} hub overlaps (via: {concepts})")
+
+        return "\n".join(lines)
+
+    async def _arun(self, target_course: str, min_degree: int = 3):
+        return self._run(target_course, min_degree)
+
+
+class OptimalPath(NeoTool):
+    name: str = "optimal_path"
+    description: str = (
+        "Find the shortest weighted path between two concept nodes in the knowledge graph. "
+        "Uses edge weights for optimal path calculation. Returns the ordered sequence of "
+        "nodes along the path. Use this to understand the learning distance between concepts."
+    )
+    args_schema: Type[BaseModel] = OptimalPathInput
+
+    def _run(self, start_node: str, end_node: str, config: RunnableConfig = None):
+        student_id = (config or {}).get("configurable", {}).get("student_id", "")
+        print(f"Run {self.name} | start={start_node}, end={end_node}")
+
+        cypher = """
+        MATCH (start:Entity {name: $start_node}), (end:Entity {name: $end_node})
+        CALL apoc.algo.dijkstra(start, end, '', 'weight') YIELD path, weight
+        UNWIND nodes(path) AS n
+        RETURN n.name AS name, n.typeNode AS type, n.content AS content
+        """
+        results = self.run_query(query=cypher, params={
+            "start_node": start_node,
+            "end_node": end_node,
+        })
+
+        if not results:
+            cypher_fallback = """
+            MATCH (start:Entity {name: $start_node}), (end:Entity {name: $end_node}),
+                  path = shortestPath((start)-[*..10]-(end))
+            WHERE ALL(r IN relationships(path) WHERE type(r) <> 'CONTENT')
+            UNWIND nodes(path) AS n
+            WHERE n.rrole IS NULL
+            RETURN n.name AS name, n.typeNode AS type, n.content AS content
+            """
+            results = self.run_query(query=cypher_fallback, params={
+                "start_node": start_node,
+                "end_node": end_node,
+            })
+
+        if not results:
+            return f"INFO: No path found between '{start_node}' and '{end_node}'."
+
+        lines = [f"OPTIMAL PATH: {start_node} → {end_node} ({len(results)} steps):"]
+        for i, r in enumerate(results):
+            mastery = 0
+            if self.tracker and student_id:
+                mastery = self.tracker.get_mastery(student_id, r['name'])
+            desc = r.get('content', '')[:50] if r.get('content') else 'N/A'
+            lines.append(
+                f"  {i+1}. [{r.get('type', '')}] {r['name']} "
+                f"| mastery: {mastery} | {desc}"
+            )
+        return "\n".join(lines)
+
+    async def _arun(self, start_node: str, end_node: str, config: RunnableConfig = None):
+        return self._run(start_node, end_node, config)

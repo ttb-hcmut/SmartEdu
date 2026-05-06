@@ -17,3 +17,10 @@ test/
 draw/
 
 script.sh
+
+# Secrets & local DB
+.env
+*.db
+
+latex/
+*.log

@@ -34,6 +34,7 @@ def clean_slide_name(name: str) -> str:
     name = re.sub(r'\s+', ' ', name) 
     
     return name
+
 class CourseIngestionService:
     def __init__(self, llm, graph_db, milvus_db, minio_repo, embedder):
         self.llm = llm
@@ -50,10 +51,15 @@ class CourseIngestionService:
 
         file_path = self.config.path  + name
         
-        chunks: List[Dict[str, str]] = extract_pdf(file_path)
+        chunks: List[Dict[str, str]] = extract_pdf(file_path,pages_per_batch= self.config.PAGE_PER_SLIDE)
         hard_refs = []
         texts = []
 
+        with open(file_path, "rb") as f:
+            file_bytes = f.read()
+        
+        self.minio_repo.upload_slide(name=name, course_name=course_name, file_data=file_bytes)
+        
         for c in chunks:
             content = c.get('content', None)
             if not content: continue 
@@ -62,6 +68,8 @@ class CourseIngestionService:
             heading = c.get('heading') or name
             texts.append((heading, content))
             
+            storage_uri = self.minio_repo.upload_chunk(chunk_id=c.get("chunk_id"), content=c.get("content"), name =name, course_name=course_name)
+
             hard_refs.append(Ref(
                 db="minio",
                 id=c["chunk_id"],
@@ -83,8 +91,8 @@ class CourseIngestionService:
 
     def _process_textbook(self,name: str, course_name):
         file_path = self.config.path  + name
-        chunks = extract_pdf(file_path)
-
+        chunks = extract_pdf(file_path, pages_per_batch= self.config.PAGE_PER_TB)
+        
         for chunk in chunks:
             text_content = chunk.get("content")
             chunk_id = chunk.get("chunk_id")
@@ -99,7 +107,7 @@ class CourseIngestionService:
             
             if not candidates:
                 continue
-
+                
             links = self.extractor.link_textbook_to_anchors(text=text_content, candidates=candidates)
             if not links:
                 virtual_id = f"ref_{uuid.uuid5(uuid.NAMESPACE_DNS, chunk_id).hex[:8]}"
@@ -109,6 +117,7 @@ class CourseIngestionService:
                 }]
             if links:
                 self.graph_db.update_links(chunk_id, heading, storage_uri, links, self.db_name)
+
     def reset_db(self):
         self.graph_db.reset(self.db_name)
         self.milvus_db.reset()
