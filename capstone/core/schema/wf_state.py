@@ -39,6 +39,7 @@ class AgentOutput(BaseModel):
 class TAOutput(BaseModel):
     summary: str = Field(description="Short summary for memo heading")
     message: str = Field(description="Full message shown to user")
+    ui_action: Optional[Dict[str, Any]] = Field(default=None, description="Frontend action, e.g. {'navigate_page': 5, 'document': '...'}")
 
 class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
@@ -48,6 +49,7 @@ class AgentState(TypedDict):
     worker_results: Dict[str, AgentOutput]
     user_query: str
     pending_proposal: Optional[Dict[str, Any]]
+    ui_action: Optional[Dict[str, Any]]
     _teach_mode: str
     _teach_context: Dict[str, Any]
 

@@ -4,7 +4,8 @@ import uvicorn
 
 
 from knowledge.api.route import router as knowledge_router
-#from TA.api.route import router as ta_router
+from TA.api.route import router as ta_router
+from student.api import router as student_router
 
 from core.api.life_span import lifespan
 from core.config import App_settings
@@ -13,8 +14,8 @@ config = App_settings()
 app = FastAPI(title=config.name, lifespan=lifespan)
 
 app.include_router(knowledge_router, prefix=config.endpoint)
-
-#app.include_router(ta_router, prefix="/api/v1/ta")
+app.include_router(ta_router, prefix="/api/v1/ta")
+app.include_router(student_router, prefix="/api/v1/student")
 
 @app.get("/")
 def root():

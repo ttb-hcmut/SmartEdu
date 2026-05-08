@@ -1,7 +1,8 @@
 import json
+import logging
 from langgraph.graph import StateGraph, END
 from core.schema.wf_state import AgentState, ConceptNode
-from TA.edu.workflow.schema import TeachEvalOutput
+from TA.edu.workflow.schema import TeachEvalOutput, TeachLectureOutput
 from TA.edu.workflow.prompt import (
     TEACH_UNDERSTAND_PROMPT,
     TEACH_REVIEW_PROMPT,
@@ -10,6 +11,8 @@ from TA.edu.workflow.prompt import (
     NEXT_TOPIC_PROMPT,
 )
 from TA.edu.utils import ainvoke_with_temp, parse_json_response, wrap_agent_structured
+
+logger = logging.getLogger(__name__)
 
 
 def build_teach_wf(agents):
@@ -20,12 +23,16 @@ def build_teach_wf(agents):
         lambda state, config: teach_understand(state, agents["TA"], config),
     )
     builder.add_node(
-        "teach_review",
-        lambda state, config: teach_lecture(state, agents["TA"], config, mode="review"),
+        "Teach_Lookup",
+        lambda state, config: teach_lookup(state, config),
     )
     builder.add_node(
-        "teach_continue",
-        lambda state, config: teach_lecture(state, agents["TA"], config, mode="continue"),
+        "Teach_RAG",
+        lambda state, config: teach_rag(state, agents["RAG"], config),
+    )
+    builder.add_node(
+        "Teach_Lecture",
+        lambda state, config: teach_lecture(state, agents["TA"], config),
     )
     builder.add_node(
         "Teach_Evaluate",
@@ -42,18 +49,32 @@ def build_teach_wf(agents):
         "Teach_Understand",
         lambda state: state.get("_teach_mode", "continue"),
         {
-            "review": "teach_review",
-            "continue": "teach_continue",
+            "review": "Teach_Lookup",
+            "continue": "Teach_Lookup",
             "evaluate": "Teach_Evaluate",
         },
     )
 
-    builder.add_edge("teach_review", END)
-    builder.add_edge("teach_continue", END)
+    builder.add_conditional_edges(
+        "Teach_Lookup",
+        _route_after_lookup,
+        {
+            "has_content": "Teach_Lecture",
+            "no_content": "Teach_RAG",
+        },
+    )
+
+    builder.add_edge("Teach_RAG", "Teach_Lecture")
+    builder.add_edge("Teach_Lecture", END)
     builder.add_edge("Teach_Evaluate", "Next_Topic")
     builder.add_edge("Next_Topic", END)
 
     return builder.compile()
+
+
+def _route_after_lookup(state: AgentState) -> str:
+    ctx = state.get("_teach_context", {})
+    return "has_content" if ctx.get("source") == "PDF" else "no_content"
 
 
 # ─── Node 1: Intent Classification ─────────────────────────────────────────
@@ -61,8 +82,10 @@ def build_teach_wf(agents):
 async def teach_understand(state: AgentState, ta_agent, config):
     """LLM classifies student intent into review / continue / evaluate."""
     query = state.get("user_query", "")
-    sid = config["configurable"]["student_id"]
+    sid = config["configurable"]["session_id"]
     tracker = config["configurable"]["student_tracker"]
+    tracer = config["configurable"].get("tracer")
+    chat_id = config["configurable"].get("chat_id", "")
     history = tracker.get_chat_history(sid)
 
     prompt = TEACH_UNDERSTAND_PROMPT.format(history=history, query=query)
@@ -77,26 +100,179 @@ async def teach_understand(state: AgentState, ta_agent, config):
     if mode not in ("review", "continue", "evaluate"):
         mode = "continue"
 
+    if tracer and chat_id:
+        tracer.log_step(
+            chat_id=chat_id,
+            node="Teach_Understand",
+            prompt=prompt,
+            state=tracker.get_student_state(sid),
+            output=mode,
+        )
+
     return {"_teach_mode": mode}
 
 
-# ─── Node 2 & 3: Lecture (review / continue) ───────────────────────────────
+# ─── Node 2: Deterministic PDF Lookup (No LLM) ─────────────────────────────
 
-async def teach_lecture(state: AgentState, ta_agent, config, mode: str):
+async def teach_lookup(state: AgentState, config):
     """
-    Unified lecture node for both 'review' and 'continue' modes.
-    Both use the same tool set (get_concept, get_pdf_pages, navigate_frontend_page).
-    No structured output — returns raw string for streaming.
+    Deterministic PDF lookup. No LLM needed.
+    Calls GetConcept + GetPages directly via Python.
     """
-    sid = config["configurable"]["student_id"]
+    sid = config["configurable"]["session_id"]
     tracker = config["configurable"]["student_tracker"]
+    tracer = config["configurable"].get("tracer")
+    chat_id = config["configurable"].get("chat_id", "")
+    teach_tools = config["configurable"].get("teach_tools", {})
+    session = tracker.get_session(sid)
+    student_state = session.student_state
+
+    current_node = student_state.get("current_pos")
+    mode = state.get("_teach_mode", "continue")
+    active_resource = student_state.get("active_resource")
+
+    no_content = {
+        "_teach_context": {"source": "NO_CONTENT", "content": "", "page": None, "mode": mode}
+    }
+
+    if not current_node:
+        logger.info("[Teach_Lookup] No current_pos, routing to RAG")
+        return no_content
+
+    concept_tool = teach_tools.get("get_concept")
+    pages_tool = teach_tools.get("get_pages")
+
+    if not concept_tool or not pages_tool:
+        logger.warning("[Teach_Lookup] teach_tools not injected, routing to RAG")
+        return no_content
+
+    # Step 1: Find pages containing the concept
+    try:
+        concept_result = concept_tool._run(concept=current_node.name)
+        parsed = json.loads(concept_result)
+    except Exception as e:
+        logger.warning(f"[Teach_Lookup] GetConcept failed: {e}")
+        return no_content
+
+    if isinstance(parsed, dict) and "error" in parsed:
+        logger.info(f"[Teach_Lookup] Concept '{current_node.name}' not in PDF, routing to RAG")
+        return no_content
+
+    if not parsed or not isinstance(parsed, list) or len(parsed) == 0:
+        return no_content
+
+    # Step 2: Read page content
+    page_num = parsed[0].get("page")
+    storage_uri = parsed[0].get("storage_uri") or active_resource
+
+    if not storage_uri or not page_num:
+        return no_content
+
+    try:
+        page_content = pages_tool._run(
+            pages=[page_num, page_num + 1],
+            destination=storage_uri,
+        )
+    except Exception as e:
+        logger.warning(f"[Teach_Lookup] GetPages failed: {e}")
+        return no_content
+
+    if "error" in page_content.lower() or len(page_content.strip()) < 50:
+        logger.info("[Teach_Lookup] PDF content too short, routing to RAG")
+        return no_content
+
+    if tracer and chat_id:
+        tracer.log_step(
+            chat_id=chat_id,
+            node="Teach_Lookup",
+            prompt=f"Lookup concept: {current_node.name}",
+            state=tracker.get_student_state(sid),
+            output=f"PDF source: page {page_num}, {len(page_content)} chars",
+        )
+
+    return {
+        "_teach_context": {
+            "source": "PDF",
+            "content": page_content,
+            "page": page_num,
+            "storage_uri": storage_uri,
+            "mode": mode,
+        }
+    }
+
+
+# ─── Node 3: RAG Fallback (reuses rag_core from retrieve.py) ───────────────
+
+async def teach_rag(state: AgentState, rag_agent, config):
+    """
+    Fallback when PDF has no content.
+    Reuses the exact same rag_core logic from WF_Retrieve.
+    """
+    from TA.edu.workflow.retrieve import rag_core
+
+    sid = config["configurable"]["session_id"]
+    tracker = config["configurable"]["student_tracker"]
+    tracer = config["configurable"].get("tracer")
+    chat_id = config["configurable"].get("chat_id", "")
+    current_node = tracker.get_student_state(sid).get("current_pos")
+    mode = state.get("_teach_mode", "continue")
+
+    concept_name = current_node.name if current_node else "the current topic"
+
+    # Build a focused query for rag_core
+    mock_message = {"role": "user", "content": f"Explain the concept of {concept_name} in detail."}
+    temp_state = {
+        **state,
+        "messages": state["messages"] + [mock_message],
+        "user_query": f"Explain {concept_name}",
+    }
+
+    rag_result = await rag_core(temp_state, rag_agent, config)
+
+    rag_content = rag_result.get("worker_results", {}).get("RAG", {}).get("content", "")
+
+    if tracer and chat_id:
+        tracer.log_step(
+            chat_id=chat_id,
+            node="Teach_RAG",
+            prompt=f"RAG fallback for: {concept_name}",
+            state=tracker.get_student_state(sid),
+            output=f"RAG retrieved {len(rag_content)} chars",
+        )
+
+    return {
+        "worker_results": rag_result.get("worker_results", {}),
+        "_teach_context": {
+            "source": "RAG",
+            "content": rag_content,
+            "page": None,
+            "mode": mode,
+        },
+    }
+
+
+# ─── Node 4: LLM Lecture Generation ────────────────────────────────────────
+
+async def teach_lecture(state: AgentState, ta_agent, config):
+    """
+    LLM generates a lecture from pre-fetched content (PDF or RAG).
+    No tool calling — content is already available in _teach_context.
+    """
+    sid = config["configurable"]["session_id"]
+    tracker = config["configurable"]["student_tracker"]
+    tracer = config["configurable"].get("tracer")
+    chat_id = config["configurable"].get("chat_id", "")
     session = tracker.get_session(sid)
     student_state = session.student_state
     history = tracker.get_chat_history(sid)
 
+    ctx = state.get("_teach_context", {})
+    content = ctx.get("content", "")
+    source = ctx.get("source", "unknown")
+    mode = ctx.get("mode", "continue")
+
     current_node = student_state.get("current_pos")
     previous_nodes = student_state.get("previous_nodes", [])
-
     current_str = current_node.name if current_node else "None"
 
     if mode == "review":
@@ -107,6 +283,8 @@ async def teach_lecture(state: AgentState, ta_agent, config, mode: str):
         prompt = TEACH_REVIEW_PROMPT.format(
             previous_nodes=prev_str,
             current_node=current_str,
+            source=source,
+            content=content[:3000],
             history=history,
         )
     else:
@@ -117,28 +295,42 @@ async def teach_lecture(state: AgentState, ta_agent, config, mode: str):
         prompt = TEACH_CONTINUE_PROMPT.format(
             previous_nodes=prev_str,
             current_node=current_str,
+            source=source,
+            content=content[:3000],
             history=history,
         )
 
-    # Agent has tools bound (get_concept, get_pdf_pages, navigate_frontend_page)
-    # LangGraph handles tool execution loop automatically
-    res = await ta_agent.ainvoke({"messages": [("user", prompt)]}, config=config)
+    # No tools bound — pure text generation from pre-fetched content
+    structured_llm = wrap_agent_structured(ta_agent, 0.5, TeachLectureOutput)
+    res = await structured_llm.ainvoke([("user", prompt)], config=config)
 
-    content = res.content if hasattr(res, "content") else str(res)
+    lecture_text = res.lecture
+    if res.challenge_question:
+        lecture_text += f"\n\n**Câu hỏi kiểm tra:** {res.challenge_question}"
+
+    if tracer and chat_id:
+        tracer.log_step(
+            chat_id=chat_id,
+            node=f"Teach_Lecture ({mode})",
+            prompt=prompt[:500],
+            state=tracker.get_student_state(sid),
+            output=lecture_text[:500],
+        )
 
     result_key = "Teach_Review" if mode == "review" else "Teach_Lecture"
     current_results = state.get("worker_results", {})
     return {
-        "worker_results": {**current_results, result_key: content},
+        "worker_results": {**current_results, result_key: lecture_text},
+        "_teach_context": {**ctx, "lecture_output": res.model_dump()},
         "status_flag": "SUCCESS",
     }
 
 
-# ─── Node 4: Evaluation ────────────────────────────────────────────────────
+# ─── Node 5: Evaluation ────────────────────────────────────────────────────
 
 async def teach_evaluate(state: AgentState, ta_agent, config):
 
-    sid = config["configurable"]["student_id"]
+    sid = config["configurable"]["session_id"]
     tracker = config["configurable"]["student_tracker"]
     history = tracker.get_chat_history(sid)
 
@@ -156,10 +348,10 @@ async def teach_evaluate(state: AgentState, ta_agent, config):
     }
 
 
-# ─── Node 5: Next Topic Selection ──────────────────────────────────────────
+# ─── Node 6: Next Topic Selection ──────────────────────────────────────────
 
 async def next_topic(state: AgentState, ta_agent, config):
-    sid = config["configurable"]["student_id"]
+    sid = config["configurable"]["session_id"]
     tracker = config["configurable"]["student_tracker"]
     session = tracker.get_session(sid)
     student_state = session.student_state

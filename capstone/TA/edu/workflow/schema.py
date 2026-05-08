@@ -38,3 +38,13 @@ class RoadmapCritique(BaseModel):
 class RoadmapFinal(BaseModel):
     final_steps: List[ConceptNode]
     pedagogical_advice: str
+
+class RouterDecision(BaseModel):
+    intent: Literal["retrieve", "roadmap", "teaching", "confirm", "clarify"] = Field(
+        description="Classified intent of the student query"
+    )
+
+class TeachLectureOutput(BaseModel):
+    """Structured output from Teach_Lecture node."""
+    lecture: str = Field(description="The lecture content to present to the student")
+    challenge_question: str = Field(default="", description="A Socratic question to test understanding")

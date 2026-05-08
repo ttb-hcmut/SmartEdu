@@ -9,6 +9,7 @@ class Memo:
     history_len: int = 6 
     session_history: List[Dict] = field(default_factory=list) 
     save_callback: Callable = None
+    session_id: str = "default"
 
     async def save(self, entry: Dict) -> None:
         message = entry.get("message", "")
@@ -21,7 +22,7 @@ class Memo:
             self.session_history.pop(0) 
         
         if self.save_callback:
-            self.save_callback(entry)
+            self.save_callback(entry, self.session_id)
 
     def get_formatted_history(self) -> str:
         if not self.session_history:

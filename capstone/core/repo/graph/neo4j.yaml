@@ -2,6 +2,8 @@ services:
   neo4j-core:
     image: neo4j:2025.12.1-enterprise
     container_name: neo4j-core
+    env_file:
+      - ../../.env
     ports:
       - "7474:7474" # HTTP Browser
       - "7687:7687" # Bolt Protocol
@@ -10,7 +12,7 @@ services:
       - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
       
       # Auth
-      - NEO4J_AUTH=neo4j/graph123
+      - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASS}
       
       # Plugins
       - NEO4J_PLUGINS=["apoc", "graph-data-science"]

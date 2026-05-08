@@ -2,11 +2,13 @@ services:
   mongo-core:
     image: mongo:latest
     container_name: mongo-core
+    env_file:
+      - ../../.env
     ports:
       - "27017:27017"
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=admin
-      - MONGO_INITDB_ROOT_PASSWORD=password123
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USER}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASS}
     command: mongod --wiredTigerCacheSizeGB 1.0
     deploy:
       resources:

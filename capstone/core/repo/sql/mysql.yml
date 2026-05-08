@@ -2,11 +2,13 @@ services:
   mysql-core:
     image: mysql:8.0
     container_name: mysql-core
+    env_file:
+      - ../../.env
     ports:
       - "3307:3306" # Access on ur own lap via 3307
     environment:
-      - MYSQL_ROOT_PASSWORD=rootpass123
-      - MYSQL_DATABASE=capstone_db
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DB_NAME}
     command: --innodb_buffer_pool_size=1G 
     deploy:
       resources:

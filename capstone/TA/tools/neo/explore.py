@@ -18,7 +18,7 @@ class RecommendNew(NeoTool):
     args_schema: Type[BaseModel] = RecommendInput
 
     def _run(self, course_filter: str = None, from_node: str = None, max_results: int = 10, config: RunnableConfig = None):
-        student_id = (config or {}).get("configurable", {}).get("student_id", "")
+        session_id = (config or {}).get("configurable", {}).get("session_id", "")
         print(f"Run {self.name} | course_filter={course_filter}, from_node={from_node}, max={max_results}")
 
         if from_node:
@@ -78,8 +78,8 @@ class RecommendNew(NeoTool):
         nodes = []
         for r in results:
             mastery = 0
-            if self.tracker and student_id:
-                mastery = self.tracker.get_mastery(student_id, r['name'])
+            if self.tracker and session_id:
+                mastery = self.tracker.get_mastery(session_id, r['name'])
             node = ConceptNode(
                 name=r['name'],
                 type=r.get('type', ''),
@@ -116,7 +116,7 @@ class CourseBackbone(NeoTool):
     args_schema: Type[BaseModel] = BackboneInput
 
     def _run(self, course_name: str, max_hubs: int = 15, config: RunnableConfig = None):
-        student_id = (config or {}).get("configurable", {}).get("student_id", "")
+        session_id = (config or {}).get("configurable", {}).get("session_id", "")
         print(f"Run {self.name} | course={course_name}, max_hubs={max_hubs}")
 
         hub_cypher = """
@@ -142,8 +142,8 @@ class CourseBackbone(NeoTool):
         hub_nodes = []
         for h in hubs:
             mastery = 0
-            if self.tracker and student_id:
-                mastery = self.tracker.get_mastery(student_id, h['name'])
+            if self.tracker and session_id:
+                mastery = self.tracker.get_mastery(session_id, h['name'])
             hub_nodes.append(ConceptNode(
                 name=h['name'],
                 type=h.get('type', ''),
@@ -257,7 +257,7 @@ class OptimalPath(NeoTool):
     args_schema: Type[BaseModel] = OptimalPathInput
 
     def _run(self, start_node: str, end_node: str, config: RunnableConfig = None):
-        student_id = (config or {}).get("configurable", {}).get("student_id", "")
+        session_id = (config or {}).get("configurable", {}).get("session_id", "")
         print(f"Run {self.name} | start={start_node}, end={end_node}")
 
         cypher = """
@@ -291,8 +291,8 @@ class OptimalPath(NeoTool):
         lines = [f"OPTIMAL PATH: {start_node} → {end_node} ({len(results)} steps):"]
         for i, r in enumerate(results):
             mastery = 0
-            if self.tracker and student_id:
-                mastery = self.tracker.get_mastery(student_id, r['name'])
+            if self.tracker and session_id:
+                mastery = self.tracker.get_mastery(session_id, r['name'])
             desc = r.get('content', '')[:50] if r.get('content') else 'N/A'
             lines.append(
                 f"  {i+1}. [{r.get('type', '')}] {r['name']} "

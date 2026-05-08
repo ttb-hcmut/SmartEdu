@@ -31,10 +31,28 @@ def parse_agent_steps(messages: list) -> list:
 
 
 def parse_json_response(content: str) -> Dict[str, Any]:
+    import re
     try:
         return json.loads(content)
-    except:
-        return {"status": "ERROR", "data": content}
+    except json.JSONDecodeError:
+        pass
+
+    json_match = re.search(r'```(?:json)?\s*(.*?)```', content, re.DOTALL)
+    if json_match:
+        try:
+            return json.loads(json_match.group(1).strip())
+        except json.JSONDecodeError:
+            pass
+
+    start_idx = content.find('{')
+    end_idx = content.rfind('}')
+    if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
+        try:
+            return json.loads(content[start_idx:end_idx + 1])
+        except json.JSONDecodeError:
+            pass
+
+    return {"status": "ERROR", "data": content}
 
 def trilingual_format(vn: str, en: str) -> str:
     return f"**{vn}** ({en}) - **{vn}**"

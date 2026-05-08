@@ -117,29 +117,46 @@ STRICT JSON OUTPUT:
 }
 # --- WF2: ROADMAP ---
 ROADMAP_PROMPT = {
-    "explore": """
-INPUT: current_pos={current_pos}, query={student_query}
+    "explore_new": """
+INPUT: query={student_query}
 
-TASK: Discover the learning landscape for the student's goal.
+CONTEXT: Student has NO current learning position. They need a starting point.
+
+TASK: Find the best starting hub nodes for this student.
 
 PROCEDURE:
-1. EXTRACT the target course/topic from the query. IF No query, move to next step
-2. CHOOSE strategy based on student state:
-   - If current_pos is empty/null:
-     → Call `recommend_new(course_filter=<extracted_course> or null)` to find starting hub nodes.
-   - If current_pos exists:
-     → Call `course_backbone(<target_course>)` to get course structure.
-     → Call `course_relevance(<target_course>)` to check cross-course prerequisites.
-3. OUTPUT the discovered nodes and their relationships.
+1. EXTRACT the target course/topic from the query (if any).
+2. Call `recommend_new(course_filter=<extracted_course>)` to find top hub nodes.
+3. If recommend_new returns empty → retry with `recommend_new()` (no filter, global search).
+4. OUTPUT the discovered nodes.
 
 ERROR HANDLING:
-- If recommend_new returns empty → try without course_filter (global search).
+- If recommend_new returns empty twice → report "No courses found in knowledge graph."
+
+EXAMPLES:
+- Query: "Tôi mới bắt đầu, nên học gì?" → recommend_new() (global)
+- Query: "Học Deep Learning" → recommend_new(course_filter="Deep Learning")
+""",
+
+    "explore_existing": """
+INPUT: current_pos={current_pos}, query={student_query}
+
+CONTEXT: Student is currently at '{current_pos}' and wants to plan a learning path.
+
+TASK: Discover the course structure and cross-course prerequisites.
+
+PROCEDURE:
+1. EXTRACT the target course/topic from the query.
+2. Call `course_backbone(<target_course>)` to get the course's skeletal structure.
+3. Call `course_relevance(<target_course>)` to check cross-course prerequisites.
+4. OUTPUT the course structure and dependency data.
+
+ERROR HANDLING:
 - If course_backbone returns "not found" → report that course doesn't exist in KG.
 
 EXAMPLES:
 - Query: "Mastering Transformers" → course_backbone("Transformers") + course_relevance("Transformers")
-- Query: "Tôi mới bắt đầu, nên học gì?" → recommend_new() (global)
-- Query: "Học Deep Learning" + current_pos=null → recommend_new(course_filter="Deep Learning")
+- Query: "Tiếp theo học gì?" → course_backbone based on current_pos context
 """,
 
     "evaluate": """
@@ -217,25 +234,18 @@ STUDENT STATE:
 - Previous nodes (recently completed): {previous_nodes}
 - Current node: {current_node}
 
+SOURCE MATERIAL ({source}):
+{content}
+
 CHAT HISTORY:
 {history}
 
 YOUR TASK:
-1. Review what the student has learned across the previous 6 nodes and current node.
-2. Ask SIMPLE recall questions to test retention — one question per key concept.
-3. Pay close attention to chat history to avoid repeating questions already asked.
-4. Use VN-EN-VN trilingual terminology for technical terms.
-
-AVAILABLE TOOLS:
-- `get_concept_page`: Find which page contains a concept in the active document.
-- `get_pdf_pages`: Extract text from specific pages of the active PDF.
-- `navigate_frontend_page`: Flip the student's UI to a specific page.
-
-PROCEDURE:
-1. For each concept you want to review, call `get_concept_page` to locate it.
-2. Read the page content with `get_pdf_pages` to refresh your knowledge.
-3. Call `navigate_frontend_page` so the student sees the relevant material.
-4. Then ask your review question based on the actual content.
+1. Review what the student has learned across the previous nodes and current node.
+2. Use the SOURCE MATERIAL above as your primary reference — do NOT fabricate content.
+3. Ask SIMPLE recall questions to test retention — one question per key concept.
+4. Pay close attention to chat history to avoid repeating questions already asked.
+5. Use VN-EN-VN trilingual terminology for technical terms.
 
 STYLE: Encouraging but rigorous. Prioritize understanding over memorization."""
 
@@ -245,11 +255,14 @@ STUDENT STATE:
 - Previous nodes: {previous_nodes}
 - Current node: {current_node}
 
+SOURCE MATERIAL ({source}):
+{content}
+
 CHAT HISTORY:
 {history}
 
 YOUR TASK:
-1. Teach the CURRENT NODE concept in depth using the source material.
+1. Teach the CURRENT NODE concept in depth using the SOURCE MATERIAL above.
 2. Break the lecture into sections. After EACH section, pose a challenge question.
 3. Connect to previous nodes when relevant (build on prior knowledge).
 4. Use VN-EN-VN trilingual terminology for all key concepts.
@@ -257,12 +270,14 @@ YOUR TASK:
 AVAILABLE TOOLS:
 - `get_concept_page`: Find which page contains a concept in the active document.
 - `get_pdf_pages`: Extract text from specific pages of the active PDF.
-- `navigate_frontend_page`: Flip the student's UI to a specific page.
+
+AVAILABLE TOOLS:
+- `get_concept_page`: Find which page contains a concept in the active document.
+- `get_pdf_pages`: Extract text from specific pages of the active PDF.
 
 PROCEDURE:
 1. ALWAYS start by calling `get_concept_page` for the current concept.
 2. Read the page text with `get_pdf_pages`.
-3. Call `navigate_frontend_page` so the student can follow along.
 4. Formulate your lecture based on the ACTUAL text you read — do NOT fabricate content.
 5. End each section with a Socratic question to test understanding.
 

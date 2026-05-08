@@ -1,40 +1,49 @@
 import logging
 from datetime import datetime
+from typing import List, Optional, Any, Dict
 from langgraph.graph import StateGraph, END
 from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import AIMessage
 
 from TA.edu.workflow.prompt import ROUTER_PROMPT, RETRIEVE_REFINE_PROMPT, PROPOSAL_PRESENT_PROMPT
+from TA.edu.workflow.schema import RouterDecision
 from core.schema.wf_state import AgentState, ConceptNode, TAOutput
 
 from TA.edu.workflow.retrieve import build_retrieve_wf
 from TA.edu.workflow.roadmap import build_roadmap_wf
 from TA.edu.workflow.teach import build_teach_wf
 
-from TA.edu.utils import ainvoke_with_temp, parse_student_state
+from TA.edu.utils import ainvoke_with_temp, parse_student_state, wrap_agent_structured
 
 logger = logging.getLogger(__name__)
 
 
-def _ctx(config: RunnableConfig):
+def _resource_ctx(config: RunnableConfig):
+    """Get session_id and student_tracker from graph config. NO student_id here."""
     c = config["configurable"]
-    return c["student_id"], c["student_tracker"]
+    return c["session_id"], c["student_tracker"]
+
+
+def _tracer_ctx(config: RunnableConfig):
+    c = config["configurable"]
+    return c.get("tracer"), c.get("chat_id", "")
 
 
 class SmartEdu:
-    def __init__(self, agents):
+    def __init__(self, agents, teach_tools: Dict = None):
         self.agents = agents
+        self.teach_tools = teach_tools or {}
         self.app = self._build_graph()
 
     def _build_graph(self):
         builder = StateGraph(AgentState)
 
         builder.add_node("TA_Router", self.ta_router_node)
-        
+
         builder.add_node("WF_Retrieve", build_retrieve_wf(agents=self.agents))
         builder.add_node("WF_Roadmap", build_roadmap_wf(agents=self.agents))
         builder.add_node("WF_Teach", build_teach_wf(agents=self.agents))
-        
+
         builder.add_node("TA_Retrieve_Finish", self.ta_retrieve_finish)
         builder.add_node("TA_Roadmap_Finish", self.ta_roadmap_finish)
         builder.add_node("TA_Teach_Finish", self.ta_teach_finish)
@@ -66,15 +75,30 @@ class SmartEdu:
         return builder.compile()
 
     async def ta_router_node(self, state: AgentState, config: RunnableConfig):
-        sid, tracker = _ctx(config)
+        sid, tracker = _resource_ctx(config)
+        tracer, chat_id = _tracer_ctx(config)
         agent = self.agents["TA"]
         S_state = parse_student_state(tracker.get_student_state(sid))
         prompt = ROUTER_PROMPT.format(state=S_state, query=state.get("user_query", ""))
-        res = await ainvoke_with_temp(agent=agent, input_data={"messages": [("user", prompt)]}, config=self.config, temp=0.0)
-        return {"intent": res.content.lower().strip()}
+
+        structured_llm = wrap_agent_structured(agent, 0.0, RouterDecision)
+        decision = await structured_llm.ainvoke([("user", prompt)], config)
+        intent = decision.intent
+
+        if tracer and chat_id:
+            tracer.log_step(
+                chat_id=chat_id,
+                node="TA_Router",
+                prompt=prompt,
+                state=tracker.get_student_state(sid),
+                output=intent,
+            )
+
+        return {"intent": intent}
 
     async def ta_retrieve_finish(self, state: AgentState, config: RunnableConfig):
-        sid, tracker = _ctx(config)
+        sid, tracker = _resource_ctx(config)
+        tracer, chat_id = _tracer_ctx(config)
         agent = self.agents["TA"]
 
         proposal = state.get("pending_proposal")
@@ -83,9 +107,19 @@ class SmartEdu:
 
         results = state.get("worker_results", {})
         prompt = f"{RETRIEVE_REFINE_PROMPT}\nData: {results}"
-        
+
         structured_llm = wrap_agent_structured(agent, 0.5, TAOutput)
         ta_output = await structured_llm.ainvoke([("user", prompt)], config)
+
+        if tracer and chat_id:
+            tracer.log_step(
+                chat_id=chat_id,
+                node="TA_Retrieve_Finish",
+                prompt=prompt,
+                state=tracker.get_student_state(sid),
+                tool_result=results,
+                output=ta_output.message,
+            )
 
         self._append_summary(sid, tracker, "Retrieve", state)
         await self._save_ta_memo(sid, tracker, ta_output)
@@ -94,9 +128,10 @@ class SmartEdu:
         return {"messages": [AIMessage(content=ta_output.message)], "pending_proposal": None}
 
     async def ta_roadmap_finish(self, state: AgentState, config: RunnableConfig):
-        sid, tracker = _ctx(config)
+        sid, tracker = _resource_ctx(config)
+        tracer, chat_id = _tracer_ctx(config)
         agent = self.agents["TA"]
-        
+
         roadmap_data = state.get("worker_results", {}).get("Roadmap", {})
         steps = roadmap_data.get("steps", [])
         advice = roadmap_data.get("advice", {})
@@ -106,7 +141,7 @@ class SmartEdu:
         if steps:
             new_upcoming = [ConceptNode(name=s) if isinstance(s, str) else ConceptNode(**s) for s in steps]
             new_current = ConceptNode(name=start_node) if start_node else (new_upcoming[0] if new_upcoming else None)
-            
+
             proposal = {
                 "type": "roadmap",
                 "new_current": new_current.model_dump() if new_current else None,
@@ -132,6 +167,16 @@ class SmartEdu:
         structured_llm = wrap_agent_structured(agent, 0.6, TAOutput)
         ta_output = await structured_llm.ainvoke([("user", prompt)], config)
 
+        if tracer and chat_id:
+            tracer.log_step(
+                chat_id=chat_id,
+                node="TA_Roadmap_Finish",
+                prompt=prompt,
+                state=tracker.get_student_state(sid),
+                tool_result=roadmap_data,
+                output=ta_output.message,
+            )
+
         self._append_summary(sid, tracker, "Roadmap", state)
         await self._save_ta_memo(sid, tracker, ta_output)
         tracker.save_state(sid)
@@ -139,7 +184,8 @@ class SmartEdu:
         return {"messages": [AIMessage(content=ta_output.message)], "pending_proposal": proposal}
 
     async def ta_teach_finish(self, state: AgentState, config: RunnableConfig):
-        sid, tracker = _ctx(config)
+        sid, tracker = _resource_ctx(config)
+        tracer, chat_id = _tracer_ctx(config)
         agent = self.agents["TA"]
 
         proposal = state.get("pending_proposal")
@@ -152,7 +198,7 @@ class SmartEdu:
             or worker_results.get("Teach_Review")
             or {}
         )
-        
+
         prompt = (
             "You are the TA wrapping up a lecture session.\n"
             "Below is the lecture material generated by the teaching module. "
@@ -162,14 +208,32 @@ class SmartEdu:
         structured_llm = wrap_agent_structured(agent, 0.5, TAOutput)
         ta_output = await structured_llm.ainvoke([("user", prompt)], config)
 
+        # Auto FE navigation from Teach_Lookup data
+        teach_ctx = state.get("_teach_context", {})
+        page = teach_ctx.get("page")
+        storage_uri = teach_ctx.get("storage_uri")
+        if page and not ta_output.ui_action:
+            ta_output.ui_action = {"navigate_page": page, "document": storage_uri}
+
+        if tracer and chat_id:
+            tracer.log_step(
+                chat_id=chat_id,
+                node="TA_Teach_Finish",
+                prompt=prompt,
+                state=tracker.get_student_state(sid),
+                tool_result=worker_results,
+                output=ta_output.message,
+            )
+
         self._append_summary(sid, tracker, "Teach", state)
         await self._save_ta_memo(sid, tracker, ta_output)
         tracker.save_state(sid)
-        
-        return {"messages": [AIMessage(content=ta_output.message)], "pending_proposal": None}
+
+        return {"messages": [AIMessage(content=ta_output.message)], "pending_proposal": None, "ui_action": ta_output.ui_action}
 
     async def apply_proposal_node(self, state: AgentState, config: RunnableConfig):
-        sid, tracker = _ctx(config)
+        sid, tracker = _resource_ctx(config)
+        tracer, chat_id = _tracer_ctx(config)
         session = tracker.get_session(sid)
         proposal = session.student_state.get("pending_proposal")
 
@@ -180,10 +244,10 @@ class SmartEdu:
             return {"messages": [AIMessage(content=msg)]}
 
         tracker.apply_proposal(sid, proposal)
-        
+
         current = session.student_state.get("current_pos")
         upcoming = session.student_state.get("upcoming_nodes", [])
-        
+
         msg = f"Đã áp dụng lộ trình mới.\n"
         if current:
             msg += f"Vị trí hiện tại: {current.name}\n"
@@ -192,6 +256,16 @@ class SmartEdu:
 
         ta_output = TAOutput(summary=f"Applied proposal: {current.name if current else 'N/A'}", message=msg)
 
+        if tracer and chat_id:
+            tracer.log_step(
+                chat_id=chat_id,
+                node="Apply_Proposal",
+                prompt="",
+                state=tracker.get_student_state(sid),
+                tool_result=proposal,
+                output=msg,
+            )
+
         self._append_summary(sid, tracker, "Confirm_Applied", state)
         await self._save_ta_memo(sid, tracker, ta_output)
         tracker.save_state(sid)
@@ -199,36 +273,56 @@ class SmartEdu:
         return {"messages": [AIMessage(content=ta_output.message)], "pending_proposal": None}
 
     @staticmethod
-    def _append_summary(student_id: str, tracker, wf_name: str, state: AgentState):
-        session = tracker.get_session(student_id)
+    def _append_summary(session_id: str, tracker, wf_name: str, state: AgentState):
+        session = tracker.get_session(session_id)
         current_pos = session.student_state.get("current_pos")
         pos_name = current_pos.name if current_pos else "N/A"
         status = state.get("status_flag", "DONE")
-        
+
         entry = f"[{datetime.now().isoformat()}] WF:{wf_name} | Topic: {pos_name} | Result: {status}"
-        
+
         existing = session.student_state.get("summary", "") or ""
         session.student_state["summary"] = (existing + "\n" + entry).strip()
 
     @staticmethod
-    async def _save_ta_memo(student_id: str, tracker, ta_output: TAOutput):
+    async def _save_ta_memo(session_id: str, tracker, ta_output: TAOutput):
         """Standard memo save for all finish nodes — uses TAOutput."""
-        session = tracker.get_session(student_id)
+        session = tracker.get_session(session_id)
         await session.memo.save({
             "role": "TA",
             "heading": ta_output.summary,
             "message": ta_output.message,
         })
 
-    async def execute(self, initial_state: AgentState, student_id: str, student_tracker):
+    async def execute(
+        self,
+        initial_state: AgentState,
+        session_id: str,
+        student_tracker,
+        tracer=None,
+        chat_id: str = "",
+        callbacks: Optional[List[Any]] = None,
+    ):
         run_config: RunnableConfig = {
             "configurable": {
-                "student_id": student_id,
+                "session_id": session_id,       # ← Chat Session UUID, không phải student_id
                 "student_tracker": student_tracker,
-            }
+                "tracer": tracer,
+                "chat_id": chat_id,
+                "teach_tools": self.teach_tools,  # Injected for Teach_Lookup (deterministic)
+            },
+            "callbacks": callbacks or [],
         }
         try:
             return await self.app.ainvoke(input=initial_state, config=run_config)
         except Exception as e:
             logger.exception("SmartEdu execution failed")
+            if tracer and chat_id:
+                tracer.log_step(
+                    chat_id=chat_id,
+                    node="__error__",
+                    prompt="",
+                    state={},
+                    output=str(e),
+                )
             return {**initial_state, "status_flag": "FAIL"}

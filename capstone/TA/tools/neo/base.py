@@ -2,14 +2,14 @@ from typing import Any, Optional
 from pydantic import Field
 from langchain.tools import BaseTool
 from core.repo.graph.graphdb import GraphDB
-from core.config import NeoStudent
+from student.Student_Tracker import Student_Tracker
 
 
 class NeoTool(BaseTool):
     """Base class for Neo4j tools."""
     db_name: str = "test"
-    tracker: Optional[Any] = Field(default=None, exclude=True)
-    engine: GraphDB = GraphDB(config=NeoStudent)
+    tracker: Student_Tracker = Field(exclude=True)
+    engine: GraphDB = Field(exclude=True)
 
     def _run(self, query: str):
         return self.run_query(query)

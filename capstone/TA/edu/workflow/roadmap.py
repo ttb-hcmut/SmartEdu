@@ -38,10 +38,16 @@ async def roadmap_explore_logic(state: AgentState, rag_agent, config):
     
     current_pos = student_state.get("current_pos")
     
-    instruction = ROADMAP_PROMPT['explore'].format(
-        current_pos=current_pos if current_pos else "null",
-        student_query=query
-    )
+    # Python if/else instead of asking LLM to branch
+    if current_pos is None:
+        instruction = ROADMAP_PROMPT['explore_new'].format(
+            student_query=query
+        )
+    else:
+        instruction = ROADMAP_PROMPT['explore_existing'].format(
+            current_pos=current_pos.name if hasattr(current_pos, 'name') else str(current_pos),
+            student_query=query
+        )
 
     res = await rag_agent.ainvoke({"messages": [("user", instruction)]}, config=config)
     

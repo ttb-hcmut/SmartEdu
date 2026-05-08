@@ -3,12 +3,14 @@ services:
   minio:
     image: minio/minio:latest
     container_name: minio-core
+    env_file:
+      - ../../.env
     ports:
       - "9000:9000"
       - "9001:9001"
     environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     command: server /data --console-address ":9001"
     deploy:
       resources:
@@ -52,6 +54,8 @@ services:
   milvus-standalone:
     image: milvusdb/milvus:v2.4.0
     container_name: milvus-core
+    env_file:
+      - ../../.env
     command: ["milvus", "run", "standalone"]
     environment:
       - ETCD_ENDPOINTS=milvus-etcd:2379 
@@ -59,10 +63,10 @@ services:
       - ETCD_ROOT_PATH=by-dev
 
       # Shit code will be fixed , Im too lazy now
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
-      - MILVUS_MINIO_ACCESS_KEY=minioadmin
-      - MILVUS_MINIO_SECRET_KEY=minioadmin
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MILVUS_MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MILVUS_MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_BUCKET_NAME=a-bucket
     ports:
       - "19530:19530"
