@@ -12,7 +12,7 @@ uv.lock
 .python-version
 
 # Other files
-Ref/
+
 test/
 
 script.sh
@@ -25,5 +25,7 @@ latex/
 *.log
 
 
-slides/
-description/
+docs/slides/
+docs/description/
+docs/Ref/
+
