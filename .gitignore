@@ -25,6 +25,7 @@ latex/
 *.log
 
 
+
 docs/slides/
 docs/description/
 docs/Ref/
@@ -35,3 +36,4 @@ docs/latex/*
 
 
 scratch/
+capstone/data

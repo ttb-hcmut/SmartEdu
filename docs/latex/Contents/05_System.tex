@@ -1,0 +1,286 @@
+\chapter{System design and implementation}\label{chap:system}
+This chapter presents the concrete design and implementation of the SmartEdu system, translating the methodology outlined in Chapter~\ref{chap:methodology} into a 
+functioning software implementation. Specifically, it covers the following aspects:
+\begin{itemize}
+    \item \textbf{System Architecture and Design Patterns:} A high-level description of the system's architecture, its components, their responsibilities, and how they interact. Moreoer, it explains the design patterns and software engineering 
+    principles that lies behind and support the architecture design, ensuring the system's modularity, scalability, 
+    and maintainability.
+    \item \textbf{Core Module:} The foundational services and utilities that support all other modules, including LLM management, database clients, configuration handling, and shared data schemas.
+    \item \textbf{Student Module:} The implementation of authentication, session management, and the Student Tracker facade that abstracts away persistence details while enforcing privacy constraints.
+    \item \textbf{Knowledge Module:} The offline pipeline for constructing the educational knowledge graph from raw course materials, including extraction, transformation, and loading stages.
+    \item \textbf{Teaching Assistant (TA) Module:} The real-time agentic workflow that processes student queries, interacts with the knowledge graph, and generates educationally grounded responses.
+\end{itemize}
+% ─────────────────────────────────────────────────────────────────────────────
+\section{System Architecture}\label{sec:arch}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Overall Architecture and Module Responsibilities}
+
+The SmartEdu backend is a monolithic FastAPI application composed of five functionally distinct, loosely coupled modules. This \textit{Modular Monolith} design was deliberately chosen over a microservices architecture at this stage: consolidating modules into a single process eliminates network-induced latency between the components of the multi-step agentic workflow, while the strict dependency inversion between modules (discussed in Section~\ref{sec:di}) ensures that each module can be extracted into an independent microservice with no changes to its internal business logic.
+
+\begin{table}[H]
+\centering
+\caption{System Module Summary}\label{tab:modules}
+\begin{tabular}{p{2.2cm} p{5cm} p{5cm}}
+\hline
+{Module} & {Primary Responsibility} & {Key Classes} \\
+\hline
+\texttt{core}      & Shared infrastructure: LLM engine, all DB repository clients, configuration, shared schemas. & \texttt{CoreLLMEngine}, \texttt{GraphDB}, \texttt{MilvusDB}, \texttt{MinioDB} \\
+\texttt{student}   & Authentication, session lifecycle, unified learning-state façade.   & \texttt{Student\_Tracker}, \texttt{StudentSession}, \texttt{Memo} \\
+\texttt{knowledge} & Offline EKG construction pipeline from raw course materials.        & \texttt{KnowledgeModule}, \texttt{CourseIngestionService} \\
+\texttt{TA}        & Real-time agentic workflow; generates pedagogically grounded responses. & \texttt{TAModule}, \texttt{SmartEdu}, \texttt{AgentInjector} \\
+\texttt{tracing}   & Per-session observability; async trace buffering and Langfuse flush. & \texttt{AgentTracer}, \texttt{TraceWriter} \\
+\hline
+\end{tabular}
+\end{table}
+
+The inter-module dependency graph is strictly acyclic: \texttt{core} is the sole shared foundation depended on by all other modules; \texttt{student}, \texttt{knowledge}, and \texttt{TA} are peer modules that do not import one another; \texttt{tracing} is consumed exclusively by \texttt{TA}. This topology is illustrated in Figure~\ref{fig:module_dep}.
+
+\input{table/chap5/sys_arch.tex}
+
+\subsection{Singleton via Lifespan Management}\label{sec:singleton}
+
+A central engineering challenge is ensuring that expensive, long-lived resources — LLM model instances and database connection pools — are initialized exactly once and shared safely across all concurrent HTTP requests. Constructing these resources per-request would incur prohibitive latency and memory exhaustion.
+\input{table/chap5/lifespan.tex}
+\\\\
+The system resolves this through FastAPI's \texttt{lifespan} context manager (\texttt{core/api/life\_span.py}), which implements the \textit{Singleton} pattern at the application scope. During startup, \texttt{lifespan} constructs every shared resource once, stores it on \texttt{app.state}, and yields control to the server. On shutdown, it performs explicit teardown. The class diagram in Figure~\ref{fig:lifespan_cd} illustrates the construction and ownership relationships.
+\\\\
+This approach yields three concrete benefits. First, {unified resource control}: all configuration (database URIs, model names, API keys) is read from a single \texttt{.env} file at startup, guaranteeing that the entire application operates on a single coherent configuration snapshot for its entire lifetime. Second, {RAM efficiency}: heavy resources (LLM weights, connection pools) are allocated once and never duplicated — multiple modules receive \textit{references} to the same object, not copies. Third, {clean shutdown}: the lifespan's teardown phase ensures all connections are explicitly closed, preventing resource leaks.
+
+\subsection{Dependency Injection via \texttt{core/dependencies.py}}\label{sec:di}
+
+Storing singletons on \texttt{app.state} is necessary but insufficient for clean architecture. Allowing route handlers to access \texttt{app.state} directly would tightly couple business logic to the ASGI framework internals, making handlers untestable in isolation.
+
+The system resolves this through a dedicated \textit{Dependency Injection} (DI) layer in \texttt{core/dependencies.py}. This file defines thin \textit{provider functions} — one per injectable resource — that each return the corresponding singleton from \texttt{app.state}. Route handlers declare their dependencies as typed parameters annotated with \texttt{Depends()}, and FastAPI's IoC container resolves and injects the correct instance at request time.
+
+This indirection yields three engineering benefits:
+\begin{itemize}
+  \item \textbf{Decoupling of business logic:} Route handlers are pure functions of their typed inputs, completely unaware of how their dependencies are constructed.
+  \item \textbf{Swappable implementations:} Replacing the LLM provider (e.g., local Ollama to a cloud API) requires modifying only the provider function and the lifespan initializer — not a single route handler.
+  \item \textbf{Testability:} The test suite overrides any provider via \texttt{app.dependency\_overrides}, enabling full unit testing without live database or LLM connections.
+\end{itemize}
+
+\subsection{MVC-Aligned Module Structure and Scalability to Microservices}\label{sec:mvc}
+
+As proposed in Section~\ref{sec:multi-agent}, the system is designed to support complex stateful workflows while remaining strictly modular. Each domain module follows an MVC-aligned internal layout that enforces a clean separation of concerns:
+
+\begin{itemize}
+  \item \textbf{Model (Schema):} Pydantic models in \texttt{core/schema/wf\_state.py} act as the system-wide data contract. No module constructs ad-hoc dictionaries to communicate state; all data is typed and validated through shared classes such as \texttt{ConceptNode}, \texttt{StudentState}, \texttt{AgentState}, and \texttt{TAOutput}.
+  \item \textbf{Controller (API Router):} Each module exposes its functionality through a dedicated FastAPI router (e.g., \texttt{TA/api/route.py}). The router handles only HTTP-level concerns: parsing requests, invoking the service layer, and serializing responses. It contains no business logic.
+  \item \textbf{Service (Domain Module):} Domain classes (\texttt{TAModule}, \texttt{KnowledgeModule}) encapsulate all business logic. They receive infrastructure dependencies exclusively via constructor injection and communicate with the controller only through shared Pydantic schemas.
+\end{itemize}
+
+This strict layering has a crucial architectural consequence: because no module's business logic contains direct imports of another module's internal classes — only shared schemas from \texttt{core} — each module can be extracted into an independent microservice by simply changing its entry point. The DI mechanism is replaced by an HTTP client call, and the Pydantic schemas serve as the API contract, with zero modification to domain logic. This makes the system \textit{scalable to microservices} by architectural design.
+
+
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Core Module}\label{sec:core}
+% ─────────────────────────────────────────────────────────────────────────────
+
+The \texttt{core} package is the dependency foundation of the entire system. It owns no domain business logic; instead, it supplies the primitive, reusable services and shared data contracts upon which all domain modules are built. As established in Section~\ref{sec:singleton}, all \texttt{core} resources are constructed once during the lifespan phase and injected by reference.
+
+\subsection{LLM Engine: Multiton and Profile-Based Configuration}
+
+\texttt{CoreLLMEngine} (\texttt{core/llm/llm\_engine.py}) is the central gateway for all LLM interactions. It implements the \textit{Multiton} pattern — a generalization of Singleton where a fixed, named pool of instances is managed. Internally it maintains a \texttt{Dict[str, ChatOllama]} keyed by a profile name (e.g., \texttt{"TA"}, \texttt{"RAG"}, \texttt{"Generator"}). When an agent requests a model via \texttt{\_get\_llm("TA")}, the engine checks its internal instance cache. If the instance does not exist, it constructs and caches a new \texttt{ChatOllama} object from the corresponding \texttt{LLMProfile} defined in \texttt{core/llm/config.py}; subsequent calls return the cached instance.
+
+Each \texttt{LLMProfile} dataclass encapsulates all operational parameters for one agent: \texttt{model\_name}, \texttt{temperature}, context window size (\texttt{num\_ctx}), and a \texttt{max\_retries} budget. For example, the \texttt{"TA"} profile uses a small 4B model at higher temperature for conversational fluency, while the \texttt{"graph"} profile uses a large 397B cloud model at low temperature for deterministic structured extraction. This \textit{lazy instantiation} ensures that a model is only loaded into GPU memory when it is first needed, optimizing resource utilization when some agents are inactive.
+
+The \texttt{invoke\_with\_retry} method abstracts the full LangChain invocation pipeline: it composes a \texttt{prompt\_template}, the resolved \texttt{ChatOllama} instance, and a Pydantic output parser into a single executable chain, then runs it with automatic retries on \texttt{OutputParserException}. This centralization ensures that all retry logic, error handling, and chain composition follow one consistent implementation across all agents and all modules.
+
+\subsection{Configuration Management: Dataclass-Based Centralization}
+
+All system configuration is expressed as Python \texttt{@dataclass} objects in \texttt{core/config.py}. Each subsystem has a dedicated configuration class — \texttt{Neo} for the knowledge graph database, \texttt{Mil\_conf} for the vector store, \texttt{Emb\_conf} for the embedding model, \texttt{TA\_conf} for the agent definitions. Environment variables are read exactly once at module import time via \texttt{python-dotenv}, which loads values from a centralized \texttt{.env} file. All dataclass fields default to sensible values if the corresponding variable is absent.
+
+This design provides two key advantages over string-based configuration dictionaries. First, configuration objects benefit from static type checking and IDE autocompletion, reducing the risk of silent key-name typos. Second, the single \texttt{.env} file acts as the sole source of truth for all deployment-specific secrets (database passwords, API keys, model endpoints), making the application trivially portable across development, staging, and production environments.
+
+\subsection{Shared Schema: The System Lingua Franca}
+
+\texttt{core/schema/wf\_state.py} defines the data contracts that all modules use to communicate. By agreeing on a single, versioned set of Pydantic models, all modules interoperate without knowing each other's internals. The key classes are described in Table~\ref{tab:schemas}.
+
+\input{table/chap5/edu_node.tex}
+
+\subsection{Repository Clients: Abstracted Database Access}
+
+The \texttt{core/repo/} sub-package provides repository wrapper classes for each database engine: \texttt{GraphDB} (Neo4j), \texttt{MilvusDB} (vector search), \texttt{MinioDB} (object storage), \texttt{Mongo\_DB} (document store), and \texttt{SQL\_DB} (relational). Each wrapper encapsulates the engine-specific client library and exposes a clean, high-level interface to the domain modules.
+
+Critically, no domain module ever imports a database client directly. All repository clients are received exclusively as constructor parameters injected by the lifespan initializer. This strict application of the Dependency Inversion Principle means that switching the underlying database technology requires modifying only the configuration dataclass and the lifespan constructor, without touching a single line of business logic in any domain module.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Student Module}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Authentication: OAuth2 + JWT}
+
+The student module implements a standard OAuth2 password flow using \texttt{PyJWT} for JWT minting. The \texttt{/student/login} endpoint validates credentials against SHA-256 hashed passwords in SQLite and returns a short-lived JWT (\texttt{sub} = \texttt{student\_id}). All subsequent requests attach this token as a Bearer credential; \texttt{get\_current\_student()} (a FastAPI dependency) decodes and validates it on each call.
+
+\subsection{Session Lifecycle and the Identity Firewall}
+
+A critical design decision in the system is the \textit{identity firewall}: the TA Module must never learn which student it is teaching. This is enforced architecturally:
+
+\begin{enumerate}
+  \item After login, the student calls \texttt{POST /student/session/start} with their JWT. The server generates a random UUID (\texttt{session\_id}) and registers it in \texttt{Student\_Tracker}.
+  \item All subsequent TA interactions supply only \texttt{session\_id}. The TA Module never receives \texttt{student\_id}.
+  \item Inside \texttt{Student\_Tracker.\_resolve()}, the private mapping \texttt{session\_id → student\_id} translates transparently before any database call.
+\end{enumerate}
+
+This pattern is analogous to a hotel key-card system: the key (session\_id) grants access to resources, but revealing it does not expose the guest's identity (student\_id).
+
+\subsection{Student\_Tracker: Multi-Session Isolation and Shared State}
+
+As discussed in Section~5.1, \texttt{Student\_Tracker} acts as a Facade over four persistence systems. In the current implementation, it manages two distinct layers of state:
+
+\begin{enumerate}
+    \item \textbf{Session-Specific State (\texttt{StudentSession})}: Keyed by \texttt{session\_id}, this layer isolates chat history and session-specific context (like recent PDF pages). This prevents "Identity Race Conditions" where multiple browser tabs contaminate each other's chat logs.
+    \item \textbf{Shared Learning State}: Keyed by \texttt{student\_id}, this layer caches the student's learning progress (current position, mastery map, etc.) and is shared across all active sessions of the same student.
+\end{enumerate}
+
+To ensure data integrity during concurrent updates, the tracker utilizes \textbf{Atomic Field Updates} in MongoDB (using the \texttt{\$set} and \texttt{\$addToSet} operators). Instead of overwriting the entire state object, the system updates specific fields (e.g., updating only the \texttt{current\_pos} or appending to \texttt{finished\_communities}). This design effectively mitigates "Data Race Conditions" where one session might accidentally revert progress made in another concurrent session.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Knowledge Module}
+% ─────────────────────────────────────────────────────────────────────────────
+
+The Knowledge Module operates as an offline, administrative pipeline responsible for constructing the Educational Knowledge Graph that the TA Module consumes at runtime. It exposes a REST interface for course ingestion triggered by administrators, not students.
+
+\subsection{Ingestion Pipeline}
+
+The pipeline proceeds through three stages: (1) {Extraction} — raw PDF pages are read from MinIO in configurable batch sizes (\texttt{PAGE\_PER\_SLIDE=15}); (2) {Transformation} — the \texttt{CoreLLMEngine} is invoked with an information-extraction prompt to produce semantic triplets; (3) {Loading} — extracted entities and relationships are written to Neo4j and vector embeddings are indexed in Milvus using the \texttt{allenai/scibert\_scivocab\_uncased} model (768-dimensional, domain-appropriate for scientific text).
+
+\subsection{Graph Schema}
+
+Nodes in Neo4j carry a \texttt{rrole} property indicating their rhetorical role (Definition, Statement, Application), derived from the \texttt{RhetoricalRetriever} tool's taxonomy. This role is used at retrieval time to match the nature of the student's query (``what is'' → Definition; ``how does it work'' → Statement). Community membership is stored as a node property, enabling \texttt{course\_backbone} queries to retrieve the skeletal hub nodes of a course in a single graph traversal.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Teaching Assistant (TA) Module}
+% ─────────────────────────────────────────────────────────────────────────────
+
+The TA Module is the system's most architecturally complex component. It orchestrates a multi-agent reasoning workflow that processes student queries, adapts to their learning state, and produces educationally grounded responses.
+
+\subsection{Module-Level Design: Stateless Singleton with External Context}
+
+\texttt{TAModule} is instantiated once at startup and shared across all concurrent requests. However, it must serve many distinct students simultaneously. This is resolved by a strict statelessness contract: \texttt{TAModule} holds \textit{no per-student data}. All transient state is injected at call time through two channels:
+
+\begin{enumerate}
+  \item \textbf{Student Tracker (Facade injection):} passed to \texttt{execute()} and threaded through LangGraph's \texttt{configurable} dictionary, making it accessible to any node in the graph without polluting \texttt{AgentState}.
+  \item \textbf{Session ID:} the opaque token that the Student Tracker uses to resolve student identity internally.
+\end{enumerate}
+
+This mirrors the Stateless Service pattern used in microservices architectures: the service itself is a pure function of its inputs.
+
+\subsection{Agent Injection: Factory + Strategy Patterns}
+
+\texttt{AgentInjector.initialize\_all\_agents()} implements the \textit{Factory} pattern. Given a configuration list of \texttt{(agent\_name, system\_prompt, output\_schema)} tuples, it constructs each agent as a LangChain runnable chain:
+
+\begin{lstlisting}[language=Python]
+chain = prompt_template | llm_with_tools
+\end{lstlisting}
+
+The LLM instance is retrieved from \texttt{CoreLLMEngine} (Multiton), and tools are retrieved from \texttt{ToolFactory} by agent name. The resulting chain is stored in an \texttt{agents} dict and passed to \texttt{SmartEdu} and the workflow builders. This is also a \textit{Strategy} pattern: swapping an agent's reasoning strategy requires only changing the system prompt or tool list in the configuration, with no structural code change.
+
+\subsection{SmartEdu: State Machine (LangGraph)}
+
+The top-level \texttt{SmartEdu} class builds a LangGraph \texttt{StateGraph} that acts as a hierarchical state machine. The \textit{State Machine} pattern is highly appropriate here because the teaching workflow has a finite, well-defined set of modes (Retrieve, Roadmap, Teach, Confirm, Clarify) with deterministic transitions between them.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node/.style={rectangle, draw, rounded corners, minimum width=2.4cm,
+               minimum height=0.7cm, font=\small, align=center},
+  arr/.style={->, thick},
+  cond/.style={diamond, draw, font=\tiny, align=center, aspect=2}
+]
+\node[node, fill=gray!20] (router) {TA\_Router};
+\node[node, fill=blue!15, below left=1.2cm and 2.0cm of router] (ret) {WF\_Retrieve};
+\node[node, fill=green!15, below=1.2cm of router] (road) {WF\_Roadmap};
+\node[node, fill=orange!15, below right=1.2cm and 2.0cm of router] (teach) {WF\_Teach};
+\node[node, fill=purple!10, below=2.4cm of router] (prop) {Apply\_Proposal};
+\node[node, fill=blue!8, below=1.5cm of ret] (retf) {TA\_Retrieve\_Finish};
+\node[node, fill=green!8, below=1.5cm of road] (roadf) {TA\_Roadmap\_Finish};
+\node[node, fill=orange!8, below=1.5cm of teach] (teachf) {TA\_Teach\_Finish};
+
+\draw[arr] (router) -- node[left,font=\tiny]{retrieve} (ret);
+\draw[arr] (router) -- node[right,font=\tiny]{roadmap} (road);
+\draw[arr] (router) -- node[right,font=\tiny]{teaching} (teach);
+\draw[arr] (router) -- node[right,font=\tiny]{confirm} (prop);
+\draw[arr] (ret)  -- (retf);
+\draw[arr] (road) -- (roadf);
+\draw[arr] (teach) -- (teachf);
+\end{tikzpicture}
+\caption{Top-level SmartEdu state machine. Each WF\_* node is itself a compiled sub-graph.}
+\label{fig:smartedu}
+\end{figure}
+
+The router node uses \texttt{wrap\_agent\_structured(agent, 0.0, RouterDecision)} to obtain a Pydantic-validated \texttt{RouterDecision} from the LLM, eliminating string parsing and ensuring deterministic branching.
+
+\subsection{Teaching Sub-Graph: Determinism and RAG Fallback}
+
+The \texttt{build\_teach\_wf()} sub-graph introduces a key design innovation: separating \textit{data retrieval} from \textit{content generation}, with a deterministic Python-level fallback.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node/.style={rectangle, draw, rounded corners, minimum width=2.8cm,
+               minimum height=0.7cm, font=\small, align=center},
+  arr/.style={->, thick},
+]
+\node[node, fill=gray!20] (und) {Teach\_Understand};
+\node[node, fill=blue!15, below left=1.2cm and 1.5cm of und] (lkp) {Teach\_Lookup\\{\tiny(Python, no LLM)}};
+\node[node, fill=red!10, below=2.2cm of und] (eval) {Teach\_Evaluate};
+\node[node, fill=green!15, below left=1.2cm and 0.5cm of lkp] (rag) {Teach\_RAG\\{\tiny(reuses rag\_core)}};
+\node[node, fill=orange!15, below right=1.2cm and 0.5cm of lkp] (lec) {Teach\_Lecture\\{\tiny(structured output)}};
+\node[node, fill=purple!10, below=1.5cm of eval] (nxt) {Next\_Topic};
+
+\draw[arr] (und) -- node[left,font=\tiny]{review/continue} (lkp);
+\draw[arr] (und) -- node[right,font=\tiny]{evaluate} (eval);
+\draw[arr] (lkp) -- node[left,font=\tiny]{NO\_CONTENT} (rag);
+\draw[arr] (lkp) -- node[right,font=\tiny]{HAS\_CONTENT} (lec);
+\draw[arr] (rag) -- (lec);
+\draw[arr] (eval) -- (nxt);
+\end{tikzpicture}
+\caption{Teaching sub-graph. The conditional edge from Teach\_Lookup is resolved by a Python function, not an LLM call.}
+\label{fig:teach_wf}
+\end{figure}
+
+{Teach\_Lookup} calls \texttt{GetConcept.\_run()} and \texttt{GetPages.\_run()} directly as Python functions, bypassing the LLM entirely. This deterministic lookup produces either a \texttt{source=PDF} context block or a \texttt{source=NO\_CONTENT} signal. The conditional edge \texttt{\_route\_after\_lookup()} branches based on this Python value — a critical reliability improvement over instruction-following LLM prompts for structural decisions.
+
+{Teach\_RAG} reuses \texttt{rag\_core()} from \texttt{workflow/retrieve.py}, constructing a synthetic query about the target concept. This eliminates code duplication between the Retrieve and Teach workflows and ensures that the fallback has identical retrieval quality to the primary RAG path.
+
+{Teach\_Lecture} receives pre-fetched content through \texttt{\_teach\_context} in \texttt{AgentState} and generates a structured \texttt{TeachLectureOutput} (Pydantic). Because the data is already retrieved, the LLM's role is purely generative, eliminating the need for tool calls during lecture generation and reducing hallucination risk.
+
+\subsection{Prompt Management: Module-Level \texttt{\_\_getattr\_\_}}
+
+\texttt{TA/edu/workflow/prompt.py} implements a sophisticated lazy-loading pattern using Python's module-level \texttt{\_\_getattr\_\_} hook. All prompt strings are defined with a leading underscore (e.g., \texttt{\_ROUTER\_PROMPT}), making them internal. When external code imports \texttt{ROUTER\_PROMPT}, the \texttt{\_\_getattr\_\_} intercept calls \texttt{PromptManager.get\_prompt()}, which first attempts to fetch the prompt from Langfuse Prompt Management (allowing runtime updates without redeployment) and falls back to the local underscore-prefixed variable if unavailable. This implements the \textit{Proxy} pattern: the caller sees a simple module attribute, while the proxy transparently adds remote-fetch and fallback logic.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Tracing and Observability Module}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\texttt{AgentTracer} is a per-session observer that buffers reasoning steps in memory and flushes them asynchronously to a JSON file at the end of each chat turn. It implements the \textit{Observer} pattern: the TA Module calls \texttt{log\_step()} at each graph node without blocking execution. The \texttt{end\_chat()} coroutine then serialises the complete \texttt{ChatTrace} and optionally flushes telemetry to Langfuse.
+
+Langfuse integration is opt-in and fail-safe: if environment variables \texttt{LANGFUSE\_SECRET\_KEY} and \texttt{LANGFUSE\_PUBLIC\_KEY} are absent, the tracer initialises silently without Langfuse. If the \texttt{langfuse} package is not installed, a warning is logged and execution continues. This \textit{Null Object} approach ensures that observability infrastructure never degrades core functionality.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Database Design and Management}
+% ─────────────────────────────────────────────────────────────────────────────
+
+The system employs a \textit{polyglot persistence} strategy, selecting each database engine for the data access patterns of its specific use case:
+
+\begin{table}[H]
+\centering
+\caption{Polyglot Persistence Strategy}
+\label{tab:databases}
+\begin{tabular}{lll}
+\hline
+{Database} & {Data} & {Primary Access Pattern} \\
+\hline
+Neo4j (Knowledge) & Concepts, relationships, communities & Graph traversal (Cypher) \\
+Neo4j (Student) & Mastery edges, learning history & Ego-graph lookup by student \\
+Milvus & Concept embeddings (768-dim) & ANN similarity search \\
+MinIO & Raw PDFs, lecture slides & Object get by URI + page \\
+MongoDB & Student state, chat history & Document upsert by student\_id \\
+SQLite & Student identity, credentials & Primary-key lookup + auth \\ \hline
+\end{tabular}
+\end{table}
+
+All database clients are injected as constructor parameters into the modules that need them. No module imports a database client directly; they receive it from the lifespan initialiser. This dependency inversion means that the database implementation can be swapped (e.g., from local Neo4j to AuraDB) by changing only the configuration and the lifespan factory, with zero changes to business logic.
