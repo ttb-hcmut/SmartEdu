@@ -21,19 +21,24 @@ script.sh
 .env
 *.db
 
-latex/
+# Documentation
+docs/*
+
+!docs/draw/
+!docs/latex/
+
+# LaTeX intermediate files
+*.aux
 *.log
-
-
-
-docs/slides/
-docs/description/
-docs/Ref/
-docs/latex/main.*
-
-!docs/latex/main.tex
-!docs/latex/main.pdf
-
+*.out
+*.toc
+*.lof
+*.lot
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.synctex.gz
 
 scratch/
 capstone/data

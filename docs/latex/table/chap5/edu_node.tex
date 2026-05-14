@@ -1,0 +1,14 @@
+\begin{table}[H]
+\centering
+\caption{Shared Schema Classes in \texttt{core/schema/wf\_state.py}}\label{tab:schemas}
+\begin{tabular}{p{2.8cm} p{9.5cm}}
+\hline
+{Class} & {Role and Key Fields} \\
+\hline
+\texttt{ConceptNode}   & Atomic EKG unit at the application layer. Carries \texttt{name}, \texttt{out\_degree} (semantic centrality from Section~\ref{sec:methodology}), \texttt{course\_name}, and \texttt{mastery} (0--6 on Bloom's Taxonomy). \\
+\texttt{StudentState}  & \texttt{TypedDict} for the complete cognitive state: \texttt{current\_pos}, \texttt{upcoming\_nodes} (roadmap), \texttt{mastery\_map} (concept→score), and \texttt{pending\_proposal} (unconfirmed path update). \\
+\texttt{AgentState}    & LangGraph state envelope flowing through the agentic workflow. Encapsulates \texttt{messages}, classified \texttt{intent}, accumulated \texttt{worker\_results}, and a \texttt{ui\_action} field for frontend navigation directives. \\
+\texttt{TAOutput}      & Structured, serializable response from the TA workflow to the API controller. Contains \texttt{summary} (memo heading), \texttt{message} (displayed to student), and optional \texttt{ui\_action}. \\
+\hline
+\end{tabular}
+\end{table}
