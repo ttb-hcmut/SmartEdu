@@ -29,8 +29,8 @@ latex/
 docs/slides/
 docs/description/
 docs/Ref/
+docs/latex/main.*
 
-docs/latex/*
 !docs/latex/main.tex
 !docs/latex/main.pdf
 
