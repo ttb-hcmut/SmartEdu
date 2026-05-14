@@ -25,7 +25,7 @@ router = APIRouter(tags=["Student Auth"])
 
 ################## Request / Response schemas
 class RegisterRequest(BaseModel):
-    student_id: str          # e.g. "s123" or UUID — caller decides
+    student_id: str          
     password: str
 
 class TokenResponse(BaseModel):
@@ -47,7 +47,7 @@ async def register(request: Request, payload: RegisterRequest):
     sql = tracker.sqldb
     mongo = tracker.mongodb
 
-    if sql.get_student_by_id(payload.student_id) is not False:
+    if sql.get_student_by_id(payload.student_id) is not None:
         raise HTTPException(status_code=409, detail="Student ID already exists.")
 
     sql.create_student(student_id=payload.student_id, username=payload.student_id, password=payload.password)

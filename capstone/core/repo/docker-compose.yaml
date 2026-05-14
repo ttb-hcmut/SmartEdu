@@ -5,6 +5,7 @@ include:
   - path: ./sql/mysql.yml
   - path: ./nosql/mongo.yml
   - path: ./milvus_db/milvus.yml
+  - path: ./util/dbgate.yml
 networks:
   shared-network:
     driver: bridge

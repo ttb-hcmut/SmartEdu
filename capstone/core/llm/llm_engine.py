@@ -37,6 +37,8 @@ class CoreLLMEngine:
             except OutputParserException:
                 if attempt == retries - 1:
                     return None
-            except Exception:
-                return None
+            except Exception as e:
+                print(f"LLM Error: {str(e)}")
+                if attempt == retries - 1:
+                    return None
         return None

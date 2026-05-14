@@ -20,11 +20,17 @@ class Page(BaseModel):
     def __str__(self):
         return f"Page {self.page}: {self.content[:50]}... Concepts: {self.concept}"
 
-
+class StudentSession:
+    def __init__(self, student_id: str, student_state: StudentState, memo: Memo):
+        self.student_id = student_id
+        self.student_state = student_state
+        self.recent_pages: deque = deque(maxlen=5)
+        self.memo = memo
+        
 class Student_Tracker:
     """
-    Student state, learning progress mangament.
-    Called by tools (in considerationsd )
+    Student state, learning progress management.
+    Handles multiple concurrent chat sessions per student.
     """
 
     def __init__(self, graphdb: GraphDB, sqldb: SQL_DB, mongodb: Mongo_DB):
@@ -32,7 +38,11 @@ class Student_Tracker:
         self.sqldb = sqldb
         self.mongodb = mongodb
 
+        # Key: session_id -> StudentSession (isolates history and session-context)
         self._sessions: Dict[str, StudentSession] = {}
+
+        # Key: student_id -> dict (shared learning progress across all sessions of this student)
+        self._student_states: Dict[str, dict] = {}
 
         self._session_map: Dict[str, str] = {}   # session_id -> student_id
 
@@ -56,17 +66,13 @@ class Student_Tracker:
         Hủy Chat Session: xóa mapping và xóa state khỏi bộ nhớ.
         Student_id vẫn giữ nguyên trong DB.
         """
-        student_id = self._session_map.pop(session_id, None)
-        if student_id:
-            self._sessions.pop(student_id, None)
-
-
+        self._session_map.pop(session_id, None)
+        self._sessions.pop(session_id, None)
 
     def get_session(self, session_id: str) -> "StudentSession":
         """
         Lấy StudentSession theo Chat Session ID.
         Dùng bởi module TA — không yêu cầu student_id.
-        Raise ValueError nếu session_id chưa được đăng ký.
         """
         student_id = self._resolve(session_id)
         return self._get_or_create_student_session(student_id, session_id)
@@ -82,9 +88,11 @@ class Student_Tracker:
         return self.graphdb.get_mastery(student_id, node_name)
 
     def save_state(self, session_id: str) -> None:
+        """Lưu toàn bộ state vào DB. Dùng update_learning_position để update từng phần."""
         student_id = self._resolve(session_id)
-        session = self._sessions[student_id]
-        self.mongodb.update_student_state(student_id, session.student_state)
+        state = self._student_states.get(student_id)
+        if state:
+            self.mongodb.update_student_state(student_id, state)
 
     def get_road_map(self, session_id: str) -> Dict:
         student_id = self._resolve(session_id)
@@ -94,29 +102,37 @@ class Student_Tracker:
         self, session_id: str, new_node: ConceptNode, bridge_nodes: list = None
     ):
         student_id = self._resolve(session_id)
-        session = self._get_or_create_student_session(student_id, session_id)
+        session = self.get_session(session_id)
         state = session.student_state
 
         if bridge_nodes:
             valid_bridge = bridge_nodes[:3]
             current_upcoming = state.get("upcoming_nodes", [])
-            state["upcoming_nodes"] = valid_bridge + current_upcoming
+            new_upcoming = valid_bridge + current_upcoming
+            state["upcoming_nodes"] = new_upcoming
+            self.mongodb.update_student_field(student_id, "state.upcoming_nodes", new_upcoming)
 
         current_pos = state.get("current_pos")
 
-        if current_pos and current_pos.name == new_node.name:
-            self.save_state(session_id)
+        if current_pos and hasattr(current_pos, 'name') and current_pos.name == new_node.name:
             return
 
         if current_pos is not None:
             prev = state.get("previous_nodes", [])
             prev.insert(0, current_pos)
-            state["previous_nodes"] = prev[:NONE_LENGTH]
+            trimmed_prev = prev[:NONE_LENGTH]
+            state["previous_nodes"] = trimmed_prev
+            self.mongodb.update_student_field(student_id, "state.previous_nodes", trimmed_prev)
 
         self.graphdb.update_learn(student_id, current_pos, new_node)
         state["current_pos"] = new_node
+        self.mongodb.update_student_field(
+            student_id, 
+            "state.current_pos", 
+            new_node.model_dump() if hasattr(new_node, 'model_dump') else new_node
+        )
+        
         self._on_node_change(session)
-        self.save_state(session_id)
 
     def current_resource(self, session_id: str, n: int = 3) -> List[Page]:
         return list(self.get_session(session_id).recent_pages)[-n:]
@@ -124,20 +140,38 @@ class Student_Tracker:
     def add_recent_page(self, session_id: str, page: Page) -> None:
         self.get_session(session_id).recent_pages.append(page)
 
+    def add_finished_community(self, session_id: str, node: ConceptNode):
+        student_id = self._resolve(session_id)
+        state = self.get_student_state(session_id)
+        if "finished_communities" not in state:
+            state["finished_communities"] = []
+        
+        # In-memory update
+        if node.name not in [n.name for n in state["finished_communities"]]:
+            state["finished_communities"].append(node)
+            # Atomic DB update
+            self.mongodb.students.update_one(
+                {"_id": student_id},
+                {"$addToSet": {"state.finished_communities": node.model_dump() if hasattr(node, 'model_dump') else node}}
+            )
+
     def apply_proposal(self, session_id: str, proposal_dict: Dict[str, Any]) -> None:
         proposal = LearningProposal(**proposal_dict)
         session = self.get_session(session_id)
+        student_id = session.student_id
         state = session.student_state
 
         if proposal.new_upcoming:
             state["upcoming_nodes"] = proposal.new_upcoming
+            self.mongodb.update_student_field(student_id, "state.upcoming_nodes", proposal.new_upcoming)
 
         if proposal.new_current:
             self.update_learning_position(session_id, proposal.new_current)
 
         self._rebuild_context(session, proposal)
         state["pending_proposal"] = None
-        self.save_state(session_id)
+        self.mongodb.update_student_field(student_id, "state.pending_proposal", None)
+        self.mongodb.update_student_field(student_id, "state.summary", state["summary"])
 
     # ──────────────────────────────────────────────────────────────────────────
     # Admin / internal helpers (dùng trực tiếp student_id)
@@ -152,7 +186,7 @@ class Student_Tracker:
     # ──────────────────────────────────────────────────────────────────────────
 
     def _resolve(self, session_id: str) -> str:
-        """Map session_id → student_id. Raise 401-like ValueError nếu không tồn tại."""
+        """Map session_id → student_id. Raise ValueError nếu không tồn tại."""
         student_id = self._session_map.get(session_id)
         if not student_id:
             raise ValueError(
@@ -164,9 +198,15 @@ class Student_Tracker:
     def _get_or_create_student_session(
         self, student_id: str, session_id: str
     ) -> "StudentSession":
-        if student_id not in self._sessions:
+        # 1. Đảm bảo learning state được load (dùng chung giữa các session)
+        if student_id not in self._student_states:
             self._ensure_student_exists(student_id)
-            state = self.mongodb.get_student_state(student_id)
+            self._student_states[student_id] = self.mongodb.get_student_state(student_id)
+        
+        state = self._student_states[student_id]
+
+        # 2. Lấy hoặc tạo session-specific object
+        if session_id not in self._sessions:
             history = self.mongodb.get_recent_history(student_id, 6, session_id)
             memo = Memo(
                 session_history=history,
@@ -175,19 +215,12 @@ class Student_Tracker:
                     student_id, entry, sid
                 ),
             )
-            self._sessions[student_id] = StudentSession(student_id, state, memo)
-        else:
-            # Update memo's session_id if client switched to a different chat session
-            session = self._sessions[student_id]
-            if session.memo.session_id != session_id:
-                session.memo.session_id = session_id
-                session.memo.session_history = self.mongodb.get_recent_history(
-                    student_id, 6, session_id
-                )
-        return self._sessions[student_id]
+            self._sessions[session_id] = StudentSession(student_id, state, memo)
+        
+        return self._sessions[session_id]
 
     def _ensure_student_exists(self, student_id: str):
-        if self.sqldb.get_student_by_id(student_id) is False:
+        if self.sqldb.get_student_by_id(student_id) is None:
             self.sqldb.create_student(student_id)
             self.mongodb.create_student(student_id)
 

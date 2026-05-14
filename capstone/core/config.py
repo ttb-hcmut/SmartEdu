@@ -6,15 +6,17 @@ env_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(dotenv_path=env_path)
 
 # Prep layer
-PAGE_PER_PDF = 15
+PAGE_PER_PDF = 10
 
 # App Layer
-DB_NAME = os.getenv("NEO4J_DB_NAME", "test")
+DB_NAME = os.getenv("DB_NEO4J_DB_NAME", "test")
 
 @dataclass
 class App_settings:
     name = "Capstone Gateway"
-    endpoint = "/internal/v1/knowledge"
+    kg_end = "/system/v1/knowledge"
+    ta_end = "/system/v1/ta"
+    stu_end = "/system/v1/student"
     port = 8001
 
 
@@ -22,13 +24,13 @@ class App_settings:
 ## Logic Layer
 @dataclass
 class K_conf:
-    profile_name = "graph"
+    profile_name: str = "graph"
 
 @dataclass
 class Ingest_param:
-    path = "data/"
-    PAGE_PER_TB = 10
-    PAGE_PER_SLIDE = 15
+    path: str = "data/"
+    PAGE_PER_TB: int = 10
+    PAGE_PER_SLIDE: int = 15
 
 ### Infratructure Layer
 @dataclass
@@ -48,9 +50,9 @@ class Emb_conf:
     
 @dataclass
 class Neo:
-    uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-    auth = (os.getenv("NEO4J_USER", "neo4j"), os.getenv("NEO4J_PASS", "graph123"))
-    db_name = os.getenv("NEO4J_DB_NAME", DB_NAME)
+    uri: str = os.getenv("DB_NEO4J_URI", "bolt://localhost:7687")
+    auth: tuple = (os.getenv("DB_NEO4J_USER", "neo4j"), os.getenv("DB_NEO4J_PASS", "graph123"))
+    db_name: str = os.getenv("DB_NEO4J_DB_NAME", DB_NAME)
 
 @dataclass
 class Minio_conf:
@@ -61,18 +63,21 @@ class Minio_conf:
 
 @dataclass
 class Mongo_conf:
-    uri = os.getenv("MONGO_URI", "mongodb://admin:password123@localhost:27017")
-    db_name = os.getenv("MONGO_DB_NAME", DB_NAME)
+    user: str = os.getenv("MONGO_USER", "admin")
+    passw: str = os.getenv("MONGO_PASS", "password123")
+    host: str = os.getenv("MONGO_HOST", "localhost:27017")
+    uri: str = f"mongodb://{user}:{passw}@{host}"   
+    db_name: str = os.getenv("MONGO_DB_NAME", DB_NAME)
 
 # TA module
 ## Logic Layer
 
 from core.llm.prompt.agents import RAG_PROMPT, TA_PROMPT, GEN_PROMPT,EVAL_PROMPT
-from core.schema.wf_state import RAGOutput
+# from core.schema.wf_state import RAGOutput
 class TA_conf:
     AGENTS = [("TA",TA_PROMPT,None ) , 
              ("Generator", GEN_PROMPT, None), 
-             ("RAG", RAG_PROMPT, RAGOutput)
+             ("RAG", RAG_PROMPT, None)
              ]
 # ("Evaluator", EVAL_PROMPT, None)
 @dataclass
@@ -94,4 +99,3 @@ class Bloom(Enum):
 NeoStudent = Neo(db_name = "students")
 
 # Student logic
-

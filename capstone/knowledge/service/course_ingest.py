@@ -58,7 +58,9 @@ class CourseIngestionService:
         with open(file_path, "rb") as f:
             file_bytes = f.read()
         
-        self.minio_repo.upload_slide(name=name, course_name=course_name, file_data=file_bytes)
+        pdf_uri = self.minio_repo.upload_slide(name=name, 
+                                            course_name=course_name, 
+                                            file_data=file_bytes)
         
         for c in chunks:
             content = c.get('content', None)
@@ -68,11 +70,11 @@ class CourseIngestionService:
             heading = c.get('heading') or name
             texts.append((heading, content))
             
-            storage_uri = self.minio_repo.upload_chunk(chunk_id=c.get("chunk_id"), content=c.get("content"), name =name, course_name=course_name)
+            storage_uri = self.minio_repo.upload_chunk(chunk_id=c.get("chunk_id"), content=c.get("content"), name=name, course_name=course_name)
 
             hard_refs.append(Ref(
                 db="minio",
-                id=c["chunk_id"],
+                id=storage_uri,
                 name=clean_slide_name(heading),
                 summary=f"{content[:100]} ......".replace("\n", " "), # Clean summary
                 p_num=c["page_num"]
@@ -101,7 +103,12 @@ class CourseIngestionService:
             if not text_content:
                 continue
                 
-            storage_uri = self.minio_repo.upload_chunk(chunk_id=chunk_id, content=text_content)
+            storage_uri = self.minio_repo.upload_chunk(
+                chunk_id=chunk_id, 
+                content=text_content, 
+                name=name, 
+                course_name=course_name
+            )
             search_query = f"{heading}: {text_content}"
             candidates = self.milvus_db.search(query=search_query, embedder=self.embedder, top_k=10)
             

@@ -13,9 +13,11 @@ from core.config import App_settings
 config = App_settings()
 app = FastAPI(title=config.name, lifespan=lifespan)
 
-app.include_router(knowledge_router, prefix=config.endpoint)
-app.include_router(ta_router, prefix="/api/v1/ta")
-app.include_router(student_router, prefix="/api/v1/student")
+app.include_router(knowledge_router, prefix=config.kg_end)
+if config.ta_end:
+    app.include_router(ta_router, prefix=config.ta_end)
+if config.stu_end:
+    app.include_router(student_router, prefix=config.stu_end)
 
 @app.get("/")
 def root():

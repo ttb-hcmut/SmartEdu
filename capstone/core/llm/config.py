@@ -14,33 +14,39 @@ class LLMProfile:
 class LLMConfig:
     profiles: Dict[str, LLMProfile] = field(default_factory=lambda: {
         "graph": LLMProfile(
-            model_name="qwen3.5:397b-cloud", 
+            model_name="gpt-oss:120b-cloud", 
             temperature=0.2, 
             num_ctx=8192, 
             max_retries=3        ),
-        "TA": LLMProfile(
+        "ta": LLMProfile(
             model_name="qwen3.5:4b", 
             temperature=0.67, 
             num_ctx=8192, 
             max_retries=2
         ),
-        "Evaluator": LLMProfile(
+        "evaluator": LLMProfile(
             model_name="qwen3:8b", 
             temperature=0.3, 
             num_ctx=8192, 
             max_retries=2
         ),
-        "Generator": LLMProfile(
+        "generator": LLMProfile(
             model_name="qwen3.5:397b-cloud", 
             temperature=0.4, 
             num_ctx=8192, 
             max_retries=2
         ),
-        "RAG": LLMProfile(
+        "rag": LLMProfile(
             model_name="qwen3.5:4b", 
             temperature=0.3, 
             num_ctx=4096, 
             max_retries=2
+        ),
+        "worker": LLMProfile(
+            model_name="gemma3:1b", 
+            temperature=0.0, 
+            num_ctx=4096, 
+            max_retries=3
         )
     })
 

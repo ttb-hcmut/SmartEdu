@@ -1,6 +1,45 @@
 
 import json
-from typing import Dict, Any
+import logging
+from typing import Dict, Any, Optional
+from langchain_core.runnables import RunnableConfig
+
+logger = logging.getLogger(__name__)
+
+
+async def execute_tool_calls(agent_response, agent, config: RunnableConfig) -> str:
+    """
+    Execute all tool_calls from an agent response, passing config so each tool
+    receives session_id and can access Student_Tracker correctly.
+
+    Returns a concatenated string of all tool outputs.
+    """
+    if not hasattr(agent_response, "tool_calls") or not agent_response.tool_calls:
+        # No tool calls — return the plain text content if any
+        return agent_response.content if hasattr(agent_response, "content") else ""
+
+    # Extract tool instances from the agent chain (prompt | llm.bind_tools([...]))
+    bound_llm = agent.last
+    raw_tools = getattr(bound_llm, "kwargs", {}).get("tools", [])
+    tool_map = {getattr(t, "name", ""): t for t in raw_tools}
+
+    results = []
+    for tcall in agent_response.tool_calls:
+        tool_name = tcall["name"]
+        tool_args = tcall["args"]
+        if tool_name not in tool_map:
+            results.append(f"--- Error: tool '{tool_name}' not found ---")
+            logger.warning(f"execute_tool_calls: tool '{tool_name}' not bound to agent.")
+            continue
+        try:
+            # Pass config so tools can read session_id for mastery lookups
+            tool_result = await tool_map[tool_name].ainvoke(tool_args, config=config)
+            results.append(f"--- {tool_name} ---\n{tool_result}")
+        except Exception as e:
+            results.append(f"--- {tool_name} Error ---\n{str(e)}")
+            logger.error(f"execute_tool_calls: {tool_name} raised {e}")
+
+    return "\n\n".join(results) if results else "No tool results."
 
 def parse_agent_steps(messages: list) -> list:
 

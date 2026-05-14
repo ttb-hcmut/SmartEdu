@@ -6,11 +6,12 @@ from core.repo.graph.graphdb import GraphDB
 import asyncio
 import json
 from time import time
-
+'''
 from keybert import KeyBERT
+kw_model = KeyBERT()
+'''
 import os
 import re
-kw_model = KeyBERT()
 import argparse
 
 
@@ -24,39 +25,40 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--n", type=int, default=2
     )
+    parser.add_argument(
+        "--query", type=str, default="What is the relationship between Reinforcement Learning and Supervised Learning"
+    )
+    parser.add_argument(
+        "--name", type=str, default="ML"
+    )
+
     return parser.parse_args()
 
 def main():
     args = parse_args()
     test: str = args.test
     n: int = args.n
-    slides = [
-        "Chapter 1 - Introduction.pdf",
-        "Chapter 2 - Decision Tree.pdf",
-        "Chapter 3 - Bayesian Learning.pdf",
-        "Chapter 4 - Genetic Algorithms.pdf",
-        "Chapter 5 - Graphical Models.pdf",
-        "Chapter 6 - SVM.pdf",
-        "Dimensionality Reduction.pdf"
-    ]
+    query: str = args.query
 
-
-    books = []
-
-    name = "ML"
     start = time()
 
     if test == "graph":
-        asyncio.run(main=run_ingestion_test(course_name=name,slide_files=slides[:n],textbook_files=books)) 
+        books = []
+
+        path = "./data/"
+        name = args.name
+        if os.path.exists(path + name):
+            slides = [f"{name}/{f}" for f in os.listdir(path + name)]
+        else:
+            slides = []
+        asyncio.run(run_ingestion_test(course_name=name,slide_files=slides[:n],textbook_files=books)) 
     elif test == "TA":
         query = "What is the relationship between Reinforcement Learning and Supervised Learning"
-        asyncio.run(test_ta_logic(query=query) )
+        asyncio.run(test_ta_logic(query=query))
 
         full()
 
     print("Time taken: ", time() - start)
-
-
 
 if __name__ == "__main__":
     main()

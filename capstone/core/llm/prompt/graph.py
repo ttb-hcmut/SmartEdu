@@ -3,22 +3,18 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.prompts import ChatPromptTemplate
 
 prompt_p0 = ChatPromptTemplate.from_messages([
-    ("system", """You are a high-level academic classifier. 
-Your goal: Identify the broad GLOBAL topic name that covers the entire content provided.
+    ("system", """Task: Classify text into a single GLOBAL academic topic.
+Rules:
+- NO sub-topics. Use parent categories only (e.g., "Machine Learning", not "SVM").
+- NO numbers, NO "Chapter/Part", NO explanations.
+- Format: Title Case Noun Phrase only.
 
-### STRATEGIC RULES:
-1. **Generalization**: If the text discusses specific types (e.g., Reinforcement Learning, Supervised Learning), the Topic should be the parent category (e.g., "Machine Learning" or "Types of Machine Learning").
-2. **Anti-Fragment**: DO NOT pick a specific sub-topic mentioned in the first line if it doesn't represent the whole text.
-3. **Consistency**: Ensure parts of the same chapter (Part 1, Part 2) likely map to the same Global Topic.
-4. **Cleanup**: Absolutely NO "Chapter", "Part", "Lecture", "Section", or numbers.
-5. **Format**: Output ONLY the Noun Phrase in Title Case.
-
-### EXAMPLES:
-- Title: "Ch 1 - Part 2" | Content: "Discussion about SVM, KNN, and CNN" -> Machine Learning
-- Title: "Lecture 4 - Continued" | Content: "Calculating Entropy and Gain" -> Decision Tree
-- Title: "Intro Part 1" | Content: "What is AI? History of Turing test" -> Artificial Intelligence"""),
+Examples:
+- SVM, KNN, CNN -> Machine Learning
+- Entropy, Information Gain -> Decision Tree
+- What is AI? -> Artificial Intelligence"""),
     
-    ("human", "TITLE: {raw_name}\nCONTENT: {text_content}")
+    ("human", "TITLE: {raw_name}\nCONTENT: {text_content}\nTopic:")
 ])
 
 ### RESULT

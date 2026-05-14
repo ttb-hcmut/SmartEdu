@@ -4,7 +4,7 @@ from typing import Dict, Any
 from core.schema.wf_state import AgentState, ConceptNode
 from TA.edu.workflow.prompt import RESEARCH_STRATEGY_PROMPT, DEEP_CHECK_PROMPT
 from TA.edu.workflow.schema import RAGCore, RAGDeep, DeepDecision
-from TA.edu.utils import parse_student_state
+from TA.edu.utils import parse_student_state, execute_tool_calls
 
 
 def build_retrieve_wf(agents):
@@ -58,28 +58,43 @@ async def deep_decision(state: AgentState, ta_agent, config):
 
 async def rag_core(state: AgentState, rag_agent, config):
     query = state["messages"][-1].content
-    
+
     prompt = f"{RESEARCH_STRATEGY_PROMPT['core']}\nQuery: {query}"
-    
+
     res = await rag_agent.ainvoke(
-        {"messages": [("user", prompt)]}, 
+        {"messages": [("user", prompt)]},
         config=config
     )
-    
+
+    # Execute any tool calls the agent decided to make (with config for session_id)
+    tool_output = await execute_tool_calls(res, rag_agent, config)
+
+    # If agent made tool calls, send tool output back to LLM to synthesize a final answer
+    if tool_output and tool_output != "No tool results.":
+        synthesis_prompt = (
+            f"{RESEARCH_STRATEGY_PROMPT['core']}\nQuery: {query}\n\n"
+            f"Tool Results:\n{tool_output}\n\n"
+            "Synthesize the above into a final JSON answer."
+        )
+        res = await rag_agent.ainvoke(
+            {"messages": [("user", synthesis_prompt)]},
+            config=config
+        )
+
     content = res.content if hasattr(res, 'content') else str(res)
-    
+
     from TA.edu.utils import parse_json_response
     parsed = parse_json_response(content)
-    
+
     rag_res = RAGCore(
         thought=parsed.get("thought", ""),
         entity_ids=parsed.get("entity_ids", []),
         content=parsed.get("content", content),
         status=parsed.get("status", "SUCCESS" if parsed.get("content") else "FAIL")
-    ) 
-    
+    )
+
     current_worker_results = state.get("worker_results", {})
-    
+
     return {
         "worker_results": {**current_worker_results, "RAG": rag_res.model_dump()},
         "status_flag": rag_res.status
@@ -89,21 +104,35 @@ async def rag_deep(state: AgentState, rag_agent, config):
     rag_data: Dict[str, Any] = state.get("worker_results", {}).get("RAG", {})
     student_state = state.get("student_state", {})
     current_pos_obj = student_state.get("current_pos")
-    
+
     student_state_str = parse_student_state(student_state)
-    
+
     query = state.get("user_query", state["messages"][-1].content)
 
     prompt = RESEARCH_STRATEGY_PROMPT["deep"].format(
-        query=query, 
+        query=query,
         current_pos=current_pos_obj.name if current_pos_obj else "None",
         entity_ids=str(rag_data.get("entity_ids", []))
     )
-    
+
     res = await rag_agent.ainvoke(
         {"messages": [("user", f"{prompt}\nContext: {rag_data.get('content', '')}")]},
         config=config
     )
+
+    # Execute any tool calls the deep agent made (with config for session_id)
+    tool_output = await execute_tool_calls(res, rag_agent, config)
+
+    if tool_output and tool_output != "No tool results.":
+        synthesis_prompt = (
+            f"{prompt}\nContext: {rag_data.get('content', '')}\n\n"
+            f"Additional Tool Results:\n{tool_output}\n\n"
+            "Synthesize into final JSON answer."
+        )
+        res = await rag_agent.ainvoke(
+            {"messages": [("user", synthesis_prompt)]},
+            config=config
+        )
 
     content = res.content if hasattr(res, 'content') else str(res)
     from TA.edu.utils import parse_json_response

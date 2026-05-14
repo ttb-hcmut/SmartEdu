@@ -12,7 +12,7 @@ services:
       - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
       
       # Auth
-      - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASS}
+      - NEO4J_AUTH=${DB_NEO4J_USER}/${DB_NEO4J_PASS}
       
       # Plugins
       - NEO4J_PLUGINS=["apoc", "graph-data-science"]

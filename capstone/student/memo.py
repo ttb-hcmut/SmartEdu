@@ -42,9 +42,3 @@ class Memo:
         return "\n".join(formatted_lines)
 
 
-class StudentSession:
-    def __init__(self, student_id: str, student_state: StudentState, memo: Memo):
-        self.student_id = student_id
-        self.student_state = student_state
-        self.recent_pages: deque = deque(maxlen=5)
-        self.memo = memo

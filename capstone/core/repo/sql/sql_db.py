@@ -34,7 +34,7 @@ class SQL_DB:
             
             if row:
                 return dict(row)
-            return False
+            return None
 
     def get_student_by_username(self, username: str) -> Optional[Dict[str, Any]]:
         with sqlite3.connect(self.db_path) as conn:
@@ -45,7 +45,7 @@ class SQL_DB:
             
             if row:
                 return dict(row)
-            return False
+            return None
 
     def create_student(self, student_id: str, username: str = "", name: str = "", email: str = "", password: str = ""):
         # Hash password simply (In production, use bcrypt)

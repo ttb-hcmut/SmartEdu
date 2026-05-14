@@ -9,7 +9,7 @@ Usage:
     await tracer.end_chat(chat_id, final_output="...", intent="retrieve")
 
 Langfuse integration:
-    Activate by default if found env vars LANGFUSE_SECRET_KEY + LANGFUSE_PUBLIC_KEY.
+    Activate by default if found env vars LANGFUSE_SECRET_KEY + LANGFUSE_PUBLIC_KEY. More docs on this shortly
     Otherwise silent skip (Consider it a disabled state, NOT an error).
 """
 
@@ -116,16 +116,11 @@ class AgentTracer:
 
     @property
     def langfuse_handler(self):
-        """Trả về Langfuse CallbackHandler để inject vào RunnableConfig callbacks."""
         return self._langfuse_handler
 
     # ── Chat lifecycle ────────────────────────────────────────────────────
 
     def begin_chat(self, query: str) -> str:
-        """
-        Bắt đầu một chat turn mới.
-        Trả về chat_id (YYYYMMDD_HHMMSS) để dùng cho các log_step tiếp theo.
-        """
         chat_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         chat = ChatTrace(chat_id=chat_id, query=query)
         self._active_chats[chat_id] = chat

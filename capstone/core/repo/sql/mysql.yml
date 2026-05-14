@@ -6,9 +6,6 @@ services:
       - ../../.env
     ports:
       - "3307:3306" # Access on ur own lap via 3307
-    environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - MYSQL_DATABASE=${MYSQL_DB_NAME}
     command: --innodb_buffer_pool_size=1G 
     deploy:
       resources:

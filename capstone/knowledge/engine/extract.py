@@ -49,7 +49,7 @@ class GraphExtractionService:
                     "course": course_name,
                     "format_instructions": self.parser_p1.get_format_instructions()
                 },
-                profile_name="deep"
+                profile_name="graph"
             )
 
             if not p1_result:
@@ -65,7 +65,7 @@ class GraphExtractionService:
                     "concept_list": ", ".join(extracted_concepts),
                     "format_instructions": self.parser_p2.get_format_instructions()
                 },
-                profile_name="deep"
+                profile_name="graph"
             )
 
             if not p2_result:
@@ -75,7 +75,7 @@ class GraphExtractionService:
                 literature_union = {
                     "og": text,
                     "meta": {
-                        "model": self.llm_engine.config.profiles["deep"].model_name,
+                        "model": self.llm_engine.config.profiles["graph"].model_name,
                         "concept_count": len(extracted_concepts),
                         "relation_count": len(p2_result.edges)
                     },

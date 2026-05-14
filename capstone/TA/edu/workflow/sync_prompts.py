@@ -1,6 +1,6 @@
 """
-Script để đồng bộ các prompt từ local (hardcoded) lên Langfuse Prompt Management.
-Chạy script này một lần (hoặc khi có cập nhật lớn) để push prompts.
+Prompt management and synchronization
+Reference from https://langfuse.com/docs/prompt-management
 """
 
 import os
@@ -13,17 +13,17 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../../tracing/.
 
 from langfuse import Langfuse
 from TA.edu.workflow.prompt import (
-    ROUTER_PROMPT,
-    RETRIEVE_REFINE_PROMPT,
-    DEEP_CHECK_PROMPT,
-    RESEARCH_STRATEGY_PROMPT,
-    ROADMAP_PROMPT,
-    TEACH_UNDERSTAND_PROMPT,
-    TEACH_REVIEW_PROMPT,
-    TEACH_CONTINUE_PROMPT,
-    TEACH_EVAL_PROMPT_V2,
-    NEXT_TOPIC_PROMPT,
-    PROPOSAL_PRESENT_PROMPT,
+    _ROUTER_PROMPT,
+    _RETRIEVE_REFINE_PROMPT,
+    _DEEP_CHECK_PROMPT,
+    _RESEARCH_STRATEGY_PROMPT,
+    _ROADMAP_PROMPT,
+    _TEACH_UNDERSTAND_PROMPT,
+    _TEACH_REVIEW_PROMPT,
+    _TEACH_CONTINUE_PROMPT,
+    _TEACH_EVAL_PROMPT_V2,
+    _NEXT_TOPIC_PROMPT,
+    _PROPOSAL_PRESENT_PROMPT,
 )
 
 def sync_all_prompts():
@@ -32,66 +32,56 @@ def sync_all_prompts():
     host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
 
     if not secret or not public:
-        print("❌ Thiếu LANGFUSE_SECRET_KEY hoặc LANGFUSE_PUBLIC_KEY. Không thể push.")
+        print("Error: NO KEY")
         return
 
-    print(f"🔄 Đang kết nối tới Langfuse tại {host}...")
+    print(f"Langfuse at {host}...")
     try:
         langfuse = Langfuse(secret_key=secret, public_key=public, host=host)
     except Exception as e:
-        print(f"❌ Kết nối thất bại: {e}")
+        print(f"Error: {e}")
         return
 
     prompts_to_sync = {
-        "TA_ROUTER_PROMPT": ROUTER_PROMPT,
-        "TA_RETRIEVE_REFINE_PROMPT": RETRIEVE_REFINE_PROMPT,
-        "TA_DEEP_CHECK_PROMPT": DEEP_CHECK_PROMPT,
-        "TA_TEACH_UNDERSTAND_PROMPT": TEACH_UNDERSTAND_PROMPT,
-        "TA_TEACH_REVIEW_PROMPT": TEACH_REVIEW_PROMPT,
-        "TA_TEACH_CONTINUE_PROMPT": TEACH_CONTINUE_PROMPT,
-        "TA_TEACH_EVAL_PROMPT_V2": TEACH_EVAL_PROMPT_V2,
-        "TA_NEXT_TOPIC_PROMPT": NEXT_TOPIC_PROMPT,
-        "TA_PROPOSAL_PRESENT_PROMPT": PROPOSAL_PRESENT_PROMPT,
+        "TA_ROUTER_PROMPT": _ROUTER_PROMPT,
+        "TA_RETRIEVE_REFINE_PROMPT": _RETRIEVE_REFINE_PROMPT,
+        "TA_DEEP_CHECK_PROMPT": _DEEP_CHECK_PROMPT,
+        "TA_TEACH_UNDERSTAND_PROMPT": _TEACH_UNDERSTAND_PROMPT,
+        "TA_TEACH_REVIEW_PROMPT": _TEACH_REVIEW_PROMPT,
+        "TA_TEACH_CONTINUE_PROMPT": _TEACH_CONTINUE_PROMPT,
+        "TA_TEACH_EVAL_PROMPT_V2": _TEACH_EVAL_PROMPT_V2,
+        "TA_NEXT_TOPIC_PROMPT": _NEXT_TOPIC_PROMPT,
+        "TA_PROPOSAL_PRESENT_PROMPT": _PROPOSAL_PRESENT_PROMPT,
     }
 
     # Add dictionaries
-    for k, v in RESEARCH_STRATEGY_PROMPT.items():
+    for k, v in _RESEARCH_STRATEGY_PROMPT.items():
         prompts_to_sync[f"TA_RESEARCH_STRATEGY_PROMPT_{k.upper()}"] = v
         
-    for k, v in ROADMAP_PROMPT.items():
+    for k, v in _ROADMAP_PROMPT.items():
         prompts_to_sync[f"TA_ROADMAP_PROMPT_{k.upper()}"] = v
 
-    print(f"📦 Tìm thấy {len(prompts_to_sync)} prompts để đồng bộ.")
+    print(f"Prompt file exist {len(prompts_to_sync)} to sync.")
 
     for name, content in prompts_to_sync.items():
         print(f"   -> Đang push '{name}'...")
         try:
-            # Dùng text prompt (chuyển đổi {var} thành {{var}} để tương thích Langfuse UI syntax)
-            # Vì ta sẽ dùng .get_langchain_prompt() để fetch về, ta có thể giữ nguyên {} 
-            # hoặc đổi sang {{}} tuỳ chọn, nhưng an toàn nhất là lưu như hiện tại (chuẩn python str.format/langchain)
-            # và khi tạo prompt trên Langfuse, ta để nguyên.
-            # Tuy nhiên, Langfuse docs bảo "Variables in prompts are defined using double curly braces {{variable}}."
-            # Do đó ta có thể replace {} -> {{}} nếu bên trong không có khoảng trắng.
-            
-            # Simple conversion for standard single brackets to double brackets for Langfuse compatibility
+
             import re
-            # replace {var} with {{var}} but ignore {{ and }}
             lf_content = re.sub(r'(?<!\{)\{([a-zA-Z0-9_]+)\}(?!\})', r'{{\1}}', content)
 
             langfuse.create_prompt(
                 name=name,
                 type="text",
                 prompt=lf_content,
-                labels=["production"],
-                is_active=True
+                labels=["production"]
             )
-            print(f"      ✅ Push thành công '{name}' (label: production)")
+            print(f"✅✅✅ Push success '{name}'")
         except Exception as e:
-            print(f"      ❌ Lỗi khi push '{name}': {e}")
+            print(f"Error: {e}")
 
-    # Đảm bảo dữ liệu được gửi hết
-    langfuse.flush()
-    print("🎉 Hoàn tất đồng bộ Prompts lên Langfuse!")
+    langfuse.flush() # Queueing for async push
+    print("Complete full sync!")
 
 if __name__ == "__main__":
     sync_all_prompts()

@@ -29,3 +29,9 @@ docs/slides/
 docs/description/
 docs/Ref/
 
+docs/latex/*
+!docs/latex/main.tex
+!docs/latex/main.pdf
+
+
+scratch/

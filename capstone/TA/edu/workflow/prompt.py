@@ -1,7 +1,7 @@
 # TA/edu/workflow/prompt.py
 
 # TA as a Router
-ROUTER_PROMPT = """
+_ROUTER_PROMPT = """
 Query: {query}
 Student State: {state}
 Analyze student query + StudentState to classify intent. Output EXACTLY one keyword.
@@ -26,7 +26,7 @@ If in doubt between retrieve/teaching → `retrieve` (safer, can escalate later)
 
 # --- WF1: RETRIEVE ---
 
-RETRIEVE_REFINE_PROMPT = """
+_RETRIEVE_REFINE_PROMPT = """
 You received retrieval results from the RAG agent. Synthesize them into a pedagogical response.
 
 CONTEXT PROVIDED:
@@ -44,7 +44,7 @@ YOUR TASK:
 
 STYLE: Objective, professional, pedagogical. Use trilingual terms for key concepts.
 """
-DEEP_CHECK_PROMPT = """Based on the student's query and the RAG retrieval result, decide: does this need DEEP analysis?
+_DEEP_CHECK_PROMPT = """Based on the student's query and the RAG retrieval result, decide: does this need DEEP analysis?
 
 QUERY: {query}
 RAG RESULT SUMMARY: {rag_summary}
@@ -61,7 +61,7 @@ Examples:
 
 Output EXACTLY one word: DEEP or SKIP"""
 
-RESEARCH_STRATEGY_PROMPT = {
+_RESEARCH_STRATEGY_PROMPT = {
     "core": """
 You are retrieving factual information from the Knowledge Graph.
 
@@ -116,7 +116,7 @@ STRICT JSON OUTPUT:
 """
 }
 # --- WF2: ROADMAP ---
-ROADMAP_PROMPT = {
+_ROADMAP_PROMPT = {
     "explore_new": """
 INPUT: query={student_query}
 
@@ -208,7 +208,7 @@ ERROR HANDLING:
 
 # --- WF3: TEACHING (V3) ---
 
-TEACH_UNDERSTAND_PROMPT = """You are an intent classifier for a teaching session.
+_TEACH_UNDERSTAND_PROMPT = """You are an intent classifier for a teaching session.
 
 CHAT HISTORY:
 {history}
@@ -228,7 +228,7 @@ DEFAULT: If ambiguous, choose `continue`.
 
 Output EXACTLY one word: review, continue, or evaluate"""
 
-TEACH_REVIEW_PROMPT = """You are the Lead TA conducting a review session.
+_TEACH_REVIEW_PROMPT = """You are the Lead TA conducting a review session.
 
 STUDENT STATE:
 - Previous nodes (recently completed): {previous_nodes}
@@ -249,7 +249,7 @@ YOUR TASK:
 
 STYLE: Encouraging but rigorous. Prioritize understanding over memorization."""
 
-TEACH_CONTINUE_PROMPT = """You are the Lead TA delivering a micro-lecture.
+_TEACH_CONTINUE_PROMPT = """You are the Lead TA delivering a micro-lecture.
 
 STUDENT STATE:
 - Previous nodes: {previous_nodes}
@@ -286,7 +286,7 @@ STYLE: Clear, structured, pedagogical. Match Bloom's level:
 - Level 3-4: Focus on application and analysis
 - Level 5-6: Focus on evaluation and synthesis"""
 
-TEACH_EVAL_PROMPT_V2 = """You are the Lead TA evaluating a student's learning session.
+_TEACH_EVAL_PROMPT_V2 = """You are the Lead TA evaluating a student's learning session.
 
 CHAT HISTORY (last 6 interactions):
 {history}
@@ -307,7 +307,7 @@ should pass even if they made minor errors.
 
 Output MUST match the TeachEvalOutput JSON schema exactly."""
 
-NEXT_TOPIC_PROMPT = """You are selecting the next learning topic for the student.
+_NEXT_TOPIC_PROMPT = """You are selecting the next learning topic for the student.
 
 EVALUATION RESULT:
 - Passed: {passed}
@@ -331,7 +331,7 @@ Output a JSON list of selected node names, ordered by priority:
 
 Select 1-3 nodes maximum. Prefer quality over quantity."""
 
-PROPOSAL_PRESENT_PROMPT = """You are presenting a learning proposal to the student.
+_PROPOSAL_PRESENT_PROMPT = """You are presenting a learning proposal to the student.
 
 PROPOSAL DATA:
 - Type: {type}
@@ -346,3 +346,69 @@ FORMAT this as a friendly, clear message for the student:
 3. Ask the student to confirm: "Bạn đồng ý không?"
 
 Keep it concise. Use VN-EN-VN for technical terms."""
+
+import os
+import logging
+
+logger = logging.getLogger(__name__)
+
+class PromptManager:
+    _lf_client = None
+    _is_active = False
+    _initialized = False
+
+    @classmethod
+    def init_langfuse(cls):
+        if cls._initialized:
+            return
+        cls._initialized = True
+        secret = os.getenv("LANGFUSE_SECRET_KEY")
+        public = os.getenv("LANGFUSE_PUBLIC_KEY")
+        if secret and public:
+            try:
+                from langfuse import Langfuse
+                cls._lf_client = Langfuse(
+                    secret_key=secret,
+                    public_key=public,
+                    host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
+                )
+                cls._is_active = True
+                logger.debug("[PromptManager] Langfuse client active.")
+            except Exception as e:
+                logger.warning(f"[PromptManager] Failed to init Langfuse client: {e}")
+
+    @classmethod
+    def _fetch_single(cls, name: str, fallback: str) -> str:
+        if not cls._is_active:
+            return fallback
+        try:
+            lf_prompt = cls._lf_client.get_prompt(name, type="text")
+            return lf_prompt.get_langchain_prompt()
+        except Exception as e:
+            logger.debug(f"[PromptManager] Using fallback for {name}. Error: {e}")
+            return fallback
+
+    @classmethod
+    def get_prompt(cls, var_name: str, fallback_value: any) -> any:
+        cls.init_langfuse()
+        if isinstance(fallback_value, dict):
+            result = {}
+            for k, v in fallback_value.items():
+                lf_name = f"TA_{var_name}_{k.upper()}"
+                result[k] = cls._fetch_single(lf_name, v)
+            return result
+        else:
+            lf_name = f"TA_{var_name}"
+            return cls._fetch_single(lf_name, fallback_value)
+
+def __getattr__(name):
+    """
+    Magic module method: dynamically fetch prompts from Langfuse
+    when they are imported, with fallback to the local _ variables.
+    """
+    fallback_var = f"_{name}"
+    if fallback_var in globals():
+        fallback_value = globals()[fallback_var]
+        return PromptManager.get_prompt(name, fallback_value)
+    
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")

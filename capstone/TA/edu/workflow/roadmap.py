@@ -50,25 +50,11 @@ async def roadmap_explore_logic(state: AgentState, rag_agent, config):
         )
 
     res = await rag_agent.ainvoke({"messages": [("user", instruction)]}, config=config)
-    
-    tool_results_text = ""
-    if hasattr(res, "tool_calls") and res.tool_calls:
-        tools = rag_agent.last.kwargs.get("tools", [])
-        tool_map = {getattr(t, "name", ""): t for t in tools}
-        
-        for tcall in res.tool_calls:
-            tool_name = tcall["name"]
-            if tool_name in tool_map:
-                try:
-                    t_result = await tool_map[tool_name].ainvoke(tcall["args"])
-                    tool_results_text += f"\n--- {tool_name} ---\n{t_result}\n"
-                except Exception as e:
-                    tool_results_text += f"\n--- {tool_name} Error ---\n{str(e)}\n"
-            else:
-                tool_results_text += f"\n--- Error: {tool_name} not found ---\n"
-                
-    if not tool_results_text.strip():
+
+    tool_results_text = await execute_tool_calls(res, rag_agent, config)
+    if not tool_results_text.strip() or tool_results_text == "No tool results.":
         tool_results_text = "No additional data retrieved from Neo4j."
+
 
     structured_llm = rag_agent.last.bind(temperature=0.0).with_structured_output(RoadmapExplore)
     

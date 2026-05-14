@@ -1,0 +1,21 @@
+services:
+  dbgate:
+    image: dbgate/dbgate
+    container_name: dbgate
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file:
+      - ../../.env
+    environment:
+      # Pre-configure connections for convenience
+      - CONNECTIONS=mongo:mongodb://${MONGO_USER}:${MONGO_PASS}@mongo-core:27017,mysql:mysql://root:${MYSQL_ROOT_PASSWORD}@mysql-core:3306
+    networks:
+      - capstone-net
+    depends_on:
+      - mongo-core
+      - mysql-core
+
+networks:
+  capstone-net:
+    external: true

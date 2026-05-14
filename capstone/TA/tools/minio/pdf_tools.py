@@ -26,10 +26,10 @@ class GetConcept(BaseTool):
         query = """
         MATCH (c:Concept)-[:HAS_REF]->(r)
         WHERE toLower(c.name) CONTAINS toLower($concept)
-        RETURN c.name AS concept_name, r.p_num AS page, r.summary AS summary, r.storage_uri AS storage_uri
+        RETURN c.name AS concept_name, r.hard_ref AS hard_ref
         LIMIT 5
         """
-        res = self.engine.run_query("test", query, {"concept": concept})
+        res = self.engine.run_query(self.engine.db_name, query, {"concept": concept})
         if not res:
             return json.dumps({"error": f"Không tìm thấy khái niệm '{concept}' trong tài liệu."})
         return json.dumps(res, ensure_ascii=False, indent=2)
@@ -52,6 +52,12 @@ class GetPages(BaseTool):
             obj_name = destination.replace(f"minio://{self.minio.bucket_name}/", "")
             if obj_name.startswith("minio://"):
                 obj_name = obj_name.split("/", 3)[-1]
+
+            if "/chunks/" in obj_name and obj_name.endswith(".txt"):
+                parts = obj_name.split("/")
+                if len(parts) >= 3:
+                    pdf_filename = parts[-3] # The {name} part
+                    obj_name = "/".join(parts[:-2]) + f"/{pdf_filename}.pdf"
             
             response = self.minio.client.get_object(self.minio.bucket_name, obj_name)
             pdf_data = response.read()
@@ -81,7 +87,12 @@ class FEToPage(BaseTool):
     args_schema: Type[BaseModel] = FEToolInput
     
     def _run(self, page: int, destination: str) -> str:
-        # Tool này không thao tác hệ thống mà chỉ nhả JSON cho luồng LangGraph trả về FE
+        if "/chunks/" in destination and destination.endswith(".txt"):
+            parts = destination.split("/")
+            if len(parts) >= 3:
+                pdf_filename = parts[-3]
+                destination = "/".join(parts[:-2]) + f"/{pdf_filename}.pdf"
+
         res = {
             "action": "NAVIGATE_PDF",
             "destination": destination,

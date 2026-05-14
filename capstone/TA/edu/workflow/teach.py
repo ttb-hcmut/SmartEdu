@@ -162,8 +162,18 @@ async def teach_lookup(state: AgentState, config):
         return no_content
 
     # Step 2: Read page content
-    page_num = parsed[0].get("page")
-    storage_uri = parsed[0].get("storage_uri") or active_resource
+    hard_ref_str = parsed[0].get("hard_ref")
+    if not hard_ref_str:
+        return no_content
+
+    try:
+        ref_data = json.loads(hard_ref_str)
+        p_list = ref_data.get("p_num", [])
+        page_num = p_list[0] if isinstance(p_list, list) and p_list else p_list
+        storage_uri = ref_data.get("id")  # In hard_ref, 'id' is the minio path
+    except Exception as e:
+        logger.warning(f"[Teach_Lookup] Failed to parse hard_ref: {e}")
+        return no_content
 
     if not storage_uri or not page_num:
         return no_content
@@ -187,7 +197,7 @@ async def teach_lookup(state: AgentState, config):
             node="Teach_Lookup",
             prompt=f"Lookup concept: {current_node.name}",
             state=tracker.get_student_state(sid),
-            output=f"PDF source: page {page_num}, {len(page_content)} chars",
+            output=f"PDF source: {ref_data.get('name')}, page {page_num}, {len(page_content)} chars",
         )
 
     return {
@@ -397,7 +407,7 @@ async def next_topic(state: AgentState, ta_agent, config):
     next_nodes = [ConceptNode(name=name) for name in selected_names if isinstance(name, str)]
 
     if current_node:
-        student_state.setdefault("finished_communities", []).append(current_node)
+        tracker.add_finished_community(sid, current_node)
 
     proposal = None
     if next_nodes:
@@ -440,7 +450,7 @@ def _get_recommendations(graphdb, current_node) -> str:
     RETURN m.name AS name, m.content AS content,
            m.typeNode AS type, out_degree
     """
-    results = graphdb.run_query("test", cypher, {"name": current_node.name})
+    results = graphdb.run_query(graphdb.db_name, cypher, {"name": current_node.name})
 
     if not results:
         return "No neighboring nodes found."
