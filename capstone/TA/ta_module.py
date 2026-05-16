@@ -2,7 +2,8 @@ from TA.agent.injector import AgentInjector
 from TA.tools.factory import ToolFactory
 from TA.edu.smart_edu import SmartEdu
 from TA.tracing import AgentTracer
-from core.schema.wf_state import AgentState
+from langchain_core.messages import HumanMessage, SystemMessage, BaseMessage, AIMessage
+from core.schema.wf_state import AgentState, TAOutput
 from student.Student_Tracker import Student_Tracker
 
 
@@ -29,7 +30,7 @@ class TAModule:
             self._tracers[session_id] = AgentTracer(session_id=session_id)
         return self._tracers[session_id]
 
-    async def run(self, user_input: str, session_id: str):
+    async def run(self, user_input: str, session_id: str, update_callback=None):
         """
         Chạy TA workflow cho một chat session.
         TAModule chỉ nhận session_id — không biết student là ai.
@@ -37,7 +38,6 @@ class TAModule:
         session = self.student_tracker.get_session(session_id)
         tracer = self._get_tracer(session_id)
 
-        # ── Bắt đầu trace ──────────────────────────────────────────────
         chat_id = tracer.begin_chat(query=user_input)
 
         await session.memo.save({
@@ -51,12 +51,13 @@ class TAModule:
 
         initial_state: AgentState = {
             "messages": [
-                {"role": "system", "content": f"Chat History Context:\n{history_str}"},
-                {"role": "user", "content": user_input}
+                SystemMessage(content=f"Chat History Context:\n{history_str}"),
+                HumanMessage(content=user_input)
             ],
             "student_state": student_state,
             "worker_results": {},
             "intent": user_input,
+            "thought": "",
             "status_flag": "On-going",
             "user_query": user_input,
         }
@@ -72,9 +73,16 @@ class TAModule:
             tracer=tracer,
             chat_id=chat_id,
             callbacks=callbacks,
+            update_callback=update_callback,
         )
 
-        response = final_state["messages"][-1].content
+        if final_state.get("status_flag") == "FAIL":
+            error_msg = final_state.get("_error", "Unknown TA workflow error.")
+            return {"message": f"System error encountered: {error_msg}", "ui_action": None}
+
+        last_msg = final_state["messages"][-1]
+        response = last_msg.content if isinstance(last_msg, BaseMessage) else last_msg.get("content", "")
+        
         status = final_state.get("status_flag", "SUCCESS")
         intent = final_state.get("intent", "")
         ui_action = final_state.get("ui_action")

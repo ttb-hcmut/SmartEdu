@@ -2,7 +2,7 @@ import json
 import logging
 from langgraph.graph import StateGraph, END
 from core.schema.wf_state import AgentState, ConceptNode
-from TA.edu.workflow.schema import TeachEvalOutput, TeachLectureOutput
+from TA.edu.workflow.schema import TeachEvalOutput, TeachLectureOutput, NextTopicOutput
 from TA.edu.workflow.prompt import (
     TEACH_UNDERSTAND_PROMPT,
     TEACH_REVIEW_PROMPT,
@@ -10,7 +10,6 @@ from TA.edu.workflow.prompt import (
     TEACH_EVAL_PROMPT_V2,
     NEXT_TOPIC_PROMPT,
 )
-from TA.edu.utils import ainvoke_with_temp, parse_json_response, wrap_agent_structured
 
 logger = logging.getLogger(__name__)
 
@@ -18,30 +17,30 @@ logger = logging.getLogger(__name__)
 def build_teach_wf(agents):
     builder = StateGraph(AgentState)
 
-    builder.add_node(
-        "Teach_Understand",
-        lambda state, config: teach_understand(state, agents["TA"], config),
-    )
-    builder.add_node(
-        "Teach_Lookup",
-        lambda state, config: teach_lookup(state, config),
-    )
-    builder.add_node(
-        "Teach_RAG",
-        lambda state, config: teach_rag(state, agents["RAG"], config),
-    )
-    builder.add_node(
-        "Teach_Lecture",
-        lambda state, config: teach_lecture(state, agents["TA"], config),
-    )
-    builder.add_node(
-        "Teach_Evaluate",
-        lambda state, config: teach_evaluate(state, agents["TA"], config),
-    )
-    builder.add_node(
-        "Next_Topic",
-        lambda state, config: next_topic(state, agents["TA"], config),
-    )
+    async def _teach_understand(state, config):
+        return await teach_understand(state, agents["TA"], config)
+
+    async def _teach_lookup(state, config):
+        return await teach_lookup(state, config)
+
+    async def _teach_rag(state, config):
+        return await teach_rag(state, agents["RAG"], config)
+
+    async def _teach_lecture(state, config):
+        return await teach_lecture(state, agents["TA"], config)
+
+    async def _teach_evaluate(state, config):
+        return await teach_evaluate(state, agents["TA"], config)
+
+    async def _next_topic(state, config):
+        return await next_topic(state, agents["TA"], config)
+
+    builder.add_node("Teach_Understand", _teach_understand)
+    builder.add_node("Teach_Lookup", _teach_lookup)
+    builder.add_node("Teach_RAG", _teach_rag)
+    builder.add_node("Teach_Lecture", _teach_lecture)
+    builder.add_node("Teach_Evaluate", _teach_evaluate)
+    builder.add_node("Next_Topic", _next_topic)
 
     builder.set_entry_point("Teach_Understand")
 
@@ -80,7 +79,7 @@ def _route_after_lookup(state: AgentState) -> str:
 # ─── Node 1: Intent Classification ─────────────────────────────────────────
 
 async def teach_understand(state: AgentState, ta_agent, config):
-    """LLM classifies student intent into review / continue / evaluate."""
+    """ Raw text classification, no schema needed"""
     query = state.get("user_query", "")
     sid = config["configurable"]["session_id"]
     tracker = config["configurable"]["student_tracker"]
@@ -89,11 +88,10 @@ async def teach_understand(state: AgentState, ta_agent, config):
     history = tracker.get_chat_history(sid)
 
     prompt = TEACH_UNDERSTAND_PROMPT.format(history=history, query=query)
-    res = await ainvoke_with_temp(
-        agent=ta_agent,
-        input_data={"messages": [("user", prompt)]},
-        config=config,
-        temp=0.0,
+
+    ## -- Simple classification: raw invoke, parse single word
+    res = await ta_agent.raw_model.ainvoke(
+        [("user", prompt)], config=config
     )
 
     mode = res.content.strip().lower()
@@ -115,10 +113,7 @@ async def teach_understand(state: AgentState, ta_agent, config):
 # ─── Node 2: Deterministic PDF Lookup (No LLM) ─────────────────────────────
 
 async def teach_lookup(state: AgentState, config):
-    """
-    Deterministic PDF lookup. No LLM needed.
-    Calls GetConcept + GetPages directly via Python.
-    """
+    """ Deterministic PDF lookup, no LLM needed"""
     sid = config["configurable"]["session_id"]
     tracker = config["configurable"]["student_tracker"]
     tracer = config["configurable"].get("tracer")
@@ -146,7 +141,7 @@ async def teach_lookup(state: AgentState, config):
         logger.warning("[Teach_Lookup] teach_tools not injected, routing to RAG")
         return no_content
 
-    # Step 1: Find pages containing the concept
+    ## -- Step 1: Find pages containing the concept
     try:
         concept_result = concept_tool._run(concept=current_node.name)
         parsed = json.loads(concept_result)
@@ -161,7 +156,7 @@ async def teach_lookup(state: AgentState, config):
     if not parsed or not isinstance(parsed, list) or len(parsed) == 0:
         return no_content
 
-    # Step 2: Read page content
+    ## -- Step 2: Read page content
     hard_ref_str = parsed[0].get("hard_ref")
     if not hard_ref_str:
         return no_content
@@ -170,7 +165,7 @@ async def teach_lookup(state: AgentState, config):
         ref_data = json.loads(hard_ref_str)
         p_list = ref_data.get("p_num", [])
         page_num = p_list[0] if isinstance(p_list, list) and p_list else p_list
-        storage_uri = ref_data.get("id")  # In hard_ref, 'id' is the minio path
+        storage_uri = ref_data.get("id")
     except Exception as e:
         logger.warning(f"[Teach_Lookup] Failed to parse hard_ref: {e}")
         return no_content
@@ -211,13 +206,10 @@ async def teach_lookup(state: AgentState, config):
     }
 
 
-# ─── Node 3: RAG Fallback (reuses rag_core from retrieve.py) ───────────────
+# ─── Node 3: RAG Fallback ──────────────────────────────────────────────────
 
 async def teach_rag(state: AgentState, rag_agent, config):
-    """
-    Fallback when PDF has no content.
-    Reuses the exact same rag_core logic from WF_Retrieve.
-    """
+    """ Reuse rag_core from retrieve.py as fallback"""
     from TA.edu.workflow.retrieve import rag_core
 
     sid = config["configurable"]["session_id"]
@@ -229,7 +221,6 @@ async def teach_rag(state: AgentState, rag_agent, config):
 
     concept_name = current_node.name if current_node else "the current topic"
 
-    # Build a focused query for rag_core
     mock_message = {"role": "user", "content": f"Explain the concept of {concept_name} in detail."}
     temp_state = {
         **state,
@@ -238,7 +229,6 @@ async def teach_rag(state: AgentState, rag_agent, config):
     }
 
     rag_result = await rag_core(temp_state, rag_agent, config)
-
     rag_content = rag_result.get("worker_results", {}).get("RAG", {}).get("content", "")
 
     if tracer and chat_id:
@@ -264,10 +254,7 @@ async def teach_rag(state: AgentState, rag_agent, config):
 # ─── Node 4: LLM Lecture Generation ────────────────────────────────────────
 
 async def teach_lecture(state: AgentState, ta_agent, config):
-    """
-    LLM generates a lecture from pre-fetched content (PDF or RAG).
-    No tool calling — content is already available in _teach_context.
-    """
+    """ No-tool node: raw_model with TeachLectureOutput schema, TA history injected"""
     sid = config["configurable"]["session_id"]
     tracker = config["configurable"]["student_tracker"]
     tracer = config["configurable"].get("tracer")
@@ -310,9 +297,16 @@ async def teach_lecture(state: AgentState, ta_agent, config):
             history=history,
         )
 
-    # No tools bound — pure text generation from pre-fetched content
-    structured_llm = wrap_agent_structured(ta_agent, 0.5, TeachLectureOutput)
-    res = await structured_llm.ainvoke([("user", prompt)], config=config)
+    ## -- Inject prior TA messages for coherence (TA model only)
+    ta_context = _extract_ta_context(state)
+    if ta_context:
+        prompt = f"[Prior TA reasoning]:\n{ta_context}\n\n{prompt}"
+
+    ## -- Direct structured output, no tool loop
+    structured_llm = ta_agent.raw_model.with_structured_output(TeachLectureOutput)
+    res: TeachLectureOutput = await structured_llm.ainvoke(
+        [("user", prompt)], config=config
+    )
 
     lecture_text = res.lecture
     if res.challenge_question:
@@ -331,6 +325,7 @@ async def teach_lecture(state: AgentState, ta_agent, config):
     current_results = state.get("worker_results", {})
     return {
         "worker_results": {**current_results, result_key: lecture_text},
+        "messages": [{"role": "assistant", "content": lecture_text}],
         "_teach_context": {**ctx, "lecture_output": res.model_dump()},
         "status_flag": "SUCCESS",
     }
@@ -339,15 +334,16 @@ async def teach_lecture(state: AgentState, ta_agent, config):
 # ─── Node 5: Evaluation ────────────────────────────────────────────────────
 
 async def teach_evaluate(state: AgentState, ta_agent, config):
-
+    """ No-tool node: raw_model with TeachEvalOutput schema"""
     sid = config["configurable"]["session_id"]
     tracker = config["configurable"]["student_tracker"]
     history = tracker.get_chat_history(sid)
 
     prompt = TEACH_EVAL_PROMPT_V2.format(history=history)
 
-    structured_llm = wrap_agent_structured(ta_agent, temp=0.1, schema=TeachEvalOutput)
-    eval_res = await structured_llm.ainvoke(
+    ## -- Direct structured output
+    structured_llm = ta_agent.raw_model.with_structured_output(TeachEvalOutput)
+    eval_res: TeachEvalOutput = await structured_llm.ainvoke(
         [("user", prompt)], config=config
     )
 
@@ -361,6 +357,7 @@ async def teach_evaluate(state: AgentState, ta_agent, config):
 # ─── Node 6: Next Topic Selection ──────────────────────────────────────────
 
 async def next_topic(state: AgentState, ta_agent, config):
+    """ No-tool node: raw_model with NextTopicOutput schema"""
     sid = config["configurable"]["session_id"]
     tracker = config["configurable"]["student_tracker"]
     session = tracker.get_session(sid)
@@ -387,23 +384,13 @@ async def next_topic(state: AgentState, ta_agent, config):
         recommend_list=recommend_result,
     )
 
-    res = await ainvoke_with_temp(
-        agent=ta_agent,
-        input_data={"messages": [("user", prompt)]},
-        config=config,
-        temp=0.3,
+    ## -- Direct structured output
+    structured_llm = ta_agent.raw_model.with_structured_output(NextTopicOutput)
+    topic_res: NextTopicOutput = await structured_llm.ainvoke(
+        [("user", prompt)], config=config
     )
 
-    content = res.content if hasattr(res, "content") else str(res)
-    selected = parse_json_response(content)
-
-    if isinstance(selected, list):
-        selected_names = selected
-    elif isinstance(selected, dict) and "data" in selected:
-        selected_names = []
-    else:
-        selected_names = []
-
+    selected_names = topic_res.selected_nodes
     next_nodes = [ConceptNode(name=name) for name in selected_names if isinstance(name, str)]
 
     if current_node:
@@ -463,3 +450,17 @@ def _get_recommendations(graphdb, current_node) -> str:
             f"| connections: {r.get('out_degree', 0)} | {desc}"
         )
     return "\n".join(lines)
+
+
+def _extract_ta_context(state: AgentState, max_msgs: int = 3) -> str:
+    """ Extract last N assistant messages from state for TA context injection"""
+    messages = state.get("messages", [])
+    ta_msgs = []
+    for msg in reversed(messages):
+        if hasattr(msg, "type") and msg.type == "ai":
+            ta_msgs.append(msg.content)
+        elif isinstance(msg, dict) and msg.get("role") == "assistant":
+            ta_msgs.append(msg["content"])
+        if len(ta_msgs) >= max_msgs:
+            break
+    return "\n---\n".join(reversed(ta_msgs))

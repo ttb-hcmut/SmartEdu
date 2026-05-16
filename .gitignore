@@ -15,8 +15,6 @@ uv.lock
 
 test/
 
-script.sh
-
 # Secrets & local DB
 .env
 *.db

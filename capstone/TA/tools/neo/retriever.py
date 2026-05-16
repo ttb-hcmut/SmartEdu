@@ -42,24 +42,35 @@ class RhetoricalRetriever(NeoTool):
     description: str = "Retrieve educational content using Node ID and rhetorical role."
     args_schema: Type[BaseModel] = ContentInput
 
-    def _run(self, node_id: str, role: str):
-        print(f"Run {self.name} with {role}")
-        cypher = """
-        MATCH (n:Entity {id: $id})-[:CONTENT]->(c:Entity)
-        WHERE toLower(c.rrole) = toLower($role)
-        RETURN c.content AS content
-        """
-        results = self.run_query(cypher, {"id": node_id, "role": role})
+    def _run(self, node_id: str, role: Optional[str] = None, limit: int = 5):
+        print(f"Run {self.name} with role {role} limit {limit}")
+        if role:
+            cypher = """
+            MATCH (n:Entity {id: $id})-[:CONTENT]->(c:Entity)
+            WHERE toLower(c.rrole) = toLower($role)
+            RETURN c.rrole AS role, c.content AS content LIMIT $limit
+            """
+            params = {"id": node_id, "role": role, "limit": limit}
+        else:
+            cypher = """
+            MATCH (n:Entity {id: $id})-[:CONTENT]->(c:Entity)
+            RETURN c.rrole AS role, c.content AS content LIMIT $limit
+            """
+            params = {"id": node_id, "limit": limit}
+
+        results = self.run_query(cypher, params)
         print("Result: ", results)
         
         if not results:
-            return f"INFO: No content found for role '{role}' on node {node_id}."
+            role_msg = f" for role '{role}'" if role else ""
+            return f"INFO: No content found{role_msg} on node {node_id}."
         
-        content_text = "\n".join([f"- {r['content']}" for r in results])
-        return f"SOURCE_DATA ({role}) for {node_id}:\n{content_text}"
+        content_text = "\n".join([f"- [{r['role']}] {r['content']}" for r in results])
+        role_msg = f" ({role})" if role else " (ALL)"
+        return f"SOURCE_DATA{role_msg} for {node_id}:\n{content_text}"
 
-    async def _arun(self, node_id: str, role: str):
-        return self._run(node_id, role)
+    async def _arun(self, node_id: str, role: Optional[str] = None, limit: int = 5):
+        return self._run(node_id, role, limit)
     
 class EdgeExplorer(NeoTool):
     name: str = "edge_explorer"

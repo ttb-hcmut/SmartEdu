@@ -6,10 +6,7 @@ from core.repo.graph.graphdb import GraphDB
 import asyncio
 import json
 from time import time
-'''
-from keybert import KeyBERT
-kw_model = KeyBERT()
-'''
+
 import os
 import re
 import argparse
@@ -25,9 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--n", type=int, default=2
     )
-    parser.add_argument(
-        "--query", type=str, default="What is the relationship between Reinforcement Learning and Supervised Learning"
-    )
+
     parser.add_argument(
         "--name", type=str, default="ML"
     )
@@ -38,9 +33,8 @@ def main():
     args = parse_args()
     test: str = args.test
     n: int = args.n
-    query: str = args.query
 
-    start = time()
+    
 
     if test == "graph":
         books = []
@@ -53,12 +47,15 @@ def main():
             slides = []
         asyncio.run(run_ingestion_test(course_name=name,slide_files=slides[:n],textbook_files=books)) 
     elif test == "TA":
-        query = "What is the relationship between Reinforcement Learning and Supervised Learning"
-        asyncio.run(test_ta_logic(query=query))
+        while True:
+            start = time()
+            query = input("\nWhat shall we do today ?\n")
+            if len(query) < 1 or query == "exit":
+                break
+            asyncio.run(test_ta_logic(query=query))
+            print(f"Time taken for question [{query}]:\n" , time() - start)
 
-        full()
-
-    print("Time taken: ", time() - start)
+    
 
 if __name__ == "__main__":
     main()

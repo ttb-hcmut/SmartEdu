@@ -45,31 +45,16 @@ class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
     student_state: StudentState 
     intent: str
+    thought: str
     status_flag: str
     worker_results: Dict[str, AgentOutput]
     user_query: str
     pending_proposal: Optional[Dict[str, Any]]
     ui_action: Optional[Dict[str, Any]]
-    _teach_mode: str
+    _teach_mode: Literal["LECTURE", "REVIEW", "QUIZ", "IDLE"]
     _teach_context: Dict[str, Any]
-
-"""
-class BridgeConcept(BaseModel):
-    id: str = Field(description="ID của node trong Neo4j")
-    name: str = Field(description="Tên khái niệm (VN - EN - VN)")
-    mastery: int = Field(description="Mức độ thông thạo hiện tại của sinh viên (0 - 6)")
-    topic_id : Optional[str] = ""
-    community_id: Optional[str] = ""
-    
-class RAGOutput(AgentOutput):
-    entity_ids: List[str] = Field(default_factory=list, description="Thực thể chính được trích xuất từ query")
-    content: str  = Field(description="Content của entity")
-    bridge_concepts: List[BridgeConcept] = Field(default_factory=list)
-    thought: Optional[str] = Field("", description="Tóm tắt suy nghĩ agent")
-    is_deep: Optional[bool] = Field(False,description="Agents decided whether it is deep analysis")
-    knowledge_gap_score: float = Field(0.0, description="")
-"""
-
+    # middleware
+    current_node: str
 
 
 

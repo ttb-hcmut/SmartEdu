@@ -22,6 +22,7 @@ from typing import Any, Dict, Optional
 
 from TA.tracing.schema import ChatTrace, StepTrace, TraceSession
 from TA.tracing.writer import TraceWriter
+from core.config import langfuse_config
 
 logger = logging.getLogger(__name__)
 
@@ -91,13 +92,16 @@ class AgentTracer:
     # ── Langfuse (optional) ───────────────────────────────────────────────
 
     def _init_langfuse(self):
-        """Khởi tạo Langfuse CallbackHandler nếu env vars tồn tại."""
-        secret = os.getenv("LANGFUSE_SECRET_KEY")
-        public = os.getenv("LANGFUSE_PUBLIC_KEY")
-        host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
+        if not langfuse_config.enable:
+            logger.debug("[AgentTracer] Langfuse disabled in config.")
+            return
+
+        secret = langfuse_config.key
+        public = langfuse_config.public_key
+        host = langfuse_config.host
 
         if not secret or not public:
-            logger.debug("[AgentTracer] Langfuse env vars not set — skipping Langfuse init.")
+            logger.warning("[AgentTracer] Langfuse enabled but keys missing!")
             return
 
         try:

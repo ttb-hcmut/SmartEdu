@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Union
 
 from core.schema.wf_state import ConceptNode
 # --- TOOL INPUT SCHEMAS ---
@@ -9,7 +9,8 @@ class EntityInput(BaseModel):
 
 class ContentInput(BaseModel):
     node_id: str = Field(description="ID")
-    role: str = Field(description="Rhetorical Role: Definition, Example, Objective, Problem, Statement")
+    role: Optional[str] = Field(default=None, description="Rhetorical Role: Definition, Example, Objective, Problem, Statement. Leave empty for all.")
+    limit: int = Field(default=5, description="Limit of results")
 
 class ExplorerInput(BaseModel):
     node_id: str = Field(description="ID của node gốc để tìm kiếm các thực thể liên quan qua các cạnh.")

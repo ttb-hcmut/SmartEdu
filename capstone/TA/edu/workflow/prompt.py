@@ -1,4 +1,7 @@
 # TA/edu/workflow/prompt.py
+## -- All JSON format instructions removed; Pydantic schemas enforce structure
+## -- Expert/self-aggrandizing claims removed
+## -- Prompts describe incoming context where applicable
 
 # TA as a Router
 _ROUTER_PROMPT = """
@@ -44,6 +47,7 @@ YOUR TASK:
 
 STYLE: Objective, professional, pedagogical. Use trilingual terms for key concepts.
 """
+
 _DEEP_CHECK_PROMPT = """Based on the student's query and the RAG retrieval result, decide: does this need DEEP analysis?
 
 QUERY: {query}
@@ -78,14 +82,6 @@ PROCEDURE:
 
 IF entity_finder returns "not found": Report it, do NOT guess IDs.
 IF rhetorical_retriever returns empty: Try a different role before giving up.
-
-STRICT JSON OUTPUT:
-{{
-  "thought": "brief reasoning (< 20 words)",
-  "entity_ids": ["list of resolved IDs"],
-  "content": "synthesized content from tools",
-  "status": "SUCCESS or FAIL"
-}}
 """,
     "deep": """
 CONTEXT: The RAG core step already retrieved basic content for query: {query}
@@ -106,13 +102,6 @@ IF is_deep = true:
 
 IF is_deep = false:
 - Return empty bridge_concepts and gap_score = 0.0
-
-STRICT JSON OUTPUT:
-{{
-  "is_deep": boolean,
-  "bridge_concepts": ["list of prerequisite concept objects"],
-  "knowledge_gap_score": float
-}}
 """
 }
 # --- WF2: ROADMAP ---
@@ -189,6 +178,8 @@ INPUT:
 - Proposed Path: {backbone}
 - Critique Results from Evaluator: {critique}
 
+CONTEXT: You will receive prior TA reasoning about the roadmap below. Use it to maintain coherence.
+
 TASK: Read the input, and the analysis from Evaluator. Decide if Evaluator reasoning make sense, or the roadmap is good or not.
 Synthesize a final, actionable roadmap for the student.
 
@@ -206,7 +197,7 @@ ERROR HANDLING:
 """
 }
 
-# --- WF3: TEACHING (V3) ---
+# --- WF3: TEACHING ---
 
 _TEACH_UNDERSTAND_PROMPT = """You are an intent classifier for a teaching session.
 
@@ -228,9 +219,7 @@ DEFAULT: If ambiguous, choose `continue`.
 
 Output EXACTLY one word: review, continue, or evaluate"""
 
-_TEACH_REVIEW_PROMPT = """You are the Lead TA conducting a review session.
-
-STUDENT STATE:
+_TEACH_REVIEW_PROMPT = """STUDENT STATE:
 - Previous nodes (recently completed): {previous_nodes}
 - Current node: {current_node}
 
@@ -239,6 +228,8 @@ SOURCE MATERIAL ({source}):
 
 CHAT HISTORY:
 {history}
+
+CONTEXT: You may receive prior TA reasoning below. Use it to avoid repeating content.
 
 YOUR TASK:
 1. Review what the student has learned across the previous nodes and current node.
@@ -249,9 +240,7 @@ YOUR TASK:
 
 STYLE: Encouraging but rigorous. Prioritize understanding over memorization."""
 
-_TEACH_CONTINUE_PROMPT = """You are the Lead TA delivering a micro-lecture.
-
-STUDENT STATE:
+_TEACH_CONTINUE_PROMPT = """STUDENT STATE:
 - Previous nodes: {previous_nodes}
 - Current node: {current_node}
 
@@ -261,34 +250,26 @@ SOURCE MATERIAL ({source}):
 CHAT HISTORY:
 {history}
 
+CONTEXT: You may receive prior TA reasoning below. Use it to build on previous lectures.
+
 YOUR TASK:
 1. Teach the CURRENT NODE concept in depth using the SOURCE MATERIAL above.
 2. Break the lecture into sections. After EACH section, pose a challenge question.
 3. Connect to previous nodes when relevant (build on prior knowledge).
 4. Use VN-EN-VN trilingual terminology for all key concepts.
 
-AVAILABLE TOOLS:
-- `get_concept_page`: Find which page contains a concept in the active document.
-- `get_pdf_pages`: Extract text from specific pages of the active PDF.
-
-AVAILABLE TOOLS:
-- `get_concept_page`: Find which page contains a concept in the active document.
-- `get_pdf_pages`: Extract text from specific pages of the active PDF.
-
 PROCEDURE:
 1. ALWAYS start by calling `get_concept_page` for the current concept.
 2. Read the page text with `get_pdf_pages`.
-4. Formulate your lecture based on the ACTUAL text you read — do NOT fabricate content.
-5. End each section with a Socratic question to test understanding.
+3. Formulate your lecture based on the ACTUAL text you read — do NOT fabricate content.
+4. End each section with a Socratic question to test understanding.
 
 STYLE: Clear, structured, pedagogical. Match Bloom's level:
 - Level 1-2: Focus on definitions and recall
 - Level 3-4: Focus on application and analysis
 - Level 5-6: Focus on evaluation and synthesis"""
 
-_TEACH_EVAL_PROMPT_V2 = """You are the Lead TA evaluating a student's learning session.
-
-CHAT HISTORY (last 6 interactions):
+_TEACH_EVAL_PROMPT_V2 = """CHAT HISTORY (last 6 interactions):
 {history}
 
 YOUR TASK:
@@ -303,13 +284,9 @@ YOUR TASK:
    - passed=false: Student needs more practice on this topic
 
 Be fair but rigorous. A student who shows genuine understanding of core concepts 
-should pass even if they made minor errors.
+should pass even if they made minor errors."""
 
-Output MUST match the TeachEvalOutput JSON schema exactly."""
-
-_NEXT_TOPIC_PROMPT = """You are selecting the next learning topic for the student.
-
-EVALUATION RESULT:
+_NEXT_TOPIC_PROMPT = """EVALUATION RESULT:
 - Passed: {passed}
 - Assessment: {user_eval}
 
@@ -326,14 +303,9 @@ YOUR TASK:
    - The student's demonstrated strengths/weaknesses from the evaluation
    - Node connectivity (higher out-degree = more central concept)
 
-Output a JSON list of selected node names, ordered by priority:
-["node_name_1", "node_name_2", ...]
-
 Select 1-3 nodes maximum. Prefer quality over quantity."""
 
-_PROPOSAL_PRESENT_PROMPT = """You are presenting a learning proposal to the student.
-
-PROPOSAL DATA:
+_PROPOSAL_PRESENT_PROMPT = """PROPOSAL DATA:
 - Type: {type}
 - Reason: {reason}
 - New starting point: {new_current}

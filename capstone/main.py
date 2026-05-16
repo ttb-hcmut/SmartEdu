@@ -29,6 +29,6 @@ if __name__ == "__main__":
         host="0.0.0.0", 
         port=config.port, 
         reload=True,
-        reload_dirs=["core", "knowledge", "TA", "nosql", "graph"]
+        reload_dirs=["core", "knowledge", "TA", "student"]
     )
     

@@ -1,22 +1,36 @@
+import time
+import logging
 from langgraph.graph import StateGraph, END
+from langgraph.prebuilt import create_react_agent
 from typing import Dict, Any
 
 from core.schema.wf_state import AgentState, ConceptNode
 from TA.edu.workflow.prompt import RESEARCH_STRATEGY_PROMPT, DEEP_CHECK_PROMPT
 from TA.edu.workflow.schema import RAGCore, RAGDeep, DeepDecision
-from TA.edu.utils import parse_student_state, execute_tool_calls
+from TA.edu.utils import parse_student_state
+
+logger = logging.getLogger(__name__)
 
 
 def build_retrieve_wf(agents):
     builder = StateGraph(AgentState)
 
-    builder.add_node("RAG_Core", lambda state, run_config: rag_core(state, agents["RAG"], run_config))
-    builder.add_node("Deep_Decision", lambda state, run_config: deep_decision(state, agents["TA"], run_config))
-    builder.add_node("rag_deep", lambda state, run_config: rag_deep(state, agents["RAG"], run_config))
+    async def _rag_core(state, config):
+        return await rag_core(state, agents["RAG"], config)
+
+    async def _deep_decision(state, config):
+        return await deep_decision(state, agents["TA"], config)
+
+    async def _rag_deep(state, config):
+        return await rag_deep(state, agents["RAG"], config)
+
+    builder.add_node("RAG_Core", _rag_core)
+    builder.add_node("Deep_Decision", _deep_decision)
+    builder.add_node("rag_deep", _rag_deep)
 
     builder.set_entry_point("RAG_Core")
     builder.add_edge("RAG_Core", "Deep_Decision")
-    
+
     builder.add_conditional_edges(
         "Deep_Decision",
         lambda state: state.get("_deep_route", "skip"),
@@ -29,83 +43,72 @@ def build_retrieve_wf(agents):
 
     return builder.compile()
 
+
 async def deep_decision(state: AgentState, ta_agent, config):
+    """Classify DEEP vs SKIP — no tools, raw text output."""
     rag_data = state.get("worker_results", {}).get("RAG", {})
-    
+
     if state.get("status_flag") == "FAIL" or not rag_data.get("entity_ids"):
         return {"_deep_route": "skip"}
-    
+
     query = state.get("user_query", state["messages"][-1].content)
     student_state = state.get("student_state", {})
-    
+
     student_state = parse_student_state(student_state)
-    
+
     prompt = DEEP_CHECK_PROMPT.format(
         query=query,
         rag_summary=str(rag_data.get("content", ""))[:300],
         current_pos=student_state
     )
-    
-    res = await ta_agent.ainvoke(
-        {"messages": [("user", prompt)]},
-        config=config
+
+    ## -- Direct structured output, no tool loop needed
+    structured_llm = ta_agent.raw_model.with_structured_output(DeepDecision)
+    decision: DeepDecision = await structured_llm.ainvoke(
+        [("user", prompt)], config=config
     )
-    
-    content = res.content if hasattr(res, 'content') else str(res)
-    decision = "deep" if "DEEP" in content.upper().strip() else "skip"
-    
-    return {"_deep_route": decision}
+
+    return {"_deep_route": decision.decision.lower()}
+
 
 async def rag_core(state: AgentState, rag_agent, config):
+    """Dynamic factory: create_react_agent handles tool loop + returns structured_response."""
     query = state["messages"][-1].content
-
     prompt = f"{RESEARCH_STRATEGY_PROMPT['core']}\nQuery: {query}"
 
-    res = await rag_agent.ainvoke(
+    ## -- Fresh react agent per call, schema-bound
+    start_create = time.time()
+    react = create_react_agent(
+        model=rag_agent.raw_model,
+        tools=rag_agent.tools,
+        prompt=rag_agent.prompt,
+        response_format=RAGCore,
+        debug=True,
+    )
+    logger.info(f"[SMART_EDU_LOG] Node: rag_core | Action: create_react_agent | Time: {time.time() - start_create:.4f}s")
+
+    start_invoke = time.time()
+    result = await react.ainvoke(
         {"messages": [("user", prompt)]},
-        config=config
+        config={"recursion_limit": 10, **config},
     )
+    logger.info(f"[SMART_EDU_LOG] Node: rag_core | Action: ainvoke | Time: {time.time() - start_invoke:.4f}s | Result keys: {list(result.keys())}")
 
-    # Execute any tool calls the agent decided to make (with config for session_id)
-    tool_output = await execute_tool_calls(res, rag_agent, config)
-
-    # If agent made tool calls, send tool output back to LLM to synthesize a final answer
-    if tool_output and tool_output != "No tool results.":
-        synthesis_prompt = (
-            f"{RESEARCH_STRATEGY_PROMPT['core']}\nQuery: {query}\n\n"
-            f"Tool Results:\n{tool_output}\n\n"
-            "Synthesize the above into a final JSON answer."
-        )
-        res = await rag_agent.ainvoke(
-            {"messages": [("user", synthesis_prompt)]},
-            config=config
-        )
-
-    content = res.content if hasattr(res, 'content') else str(res)
-
-    from TA.edu.utils import parse_json_response
-    parsed = parse_json_response(content)
-
-    rag_res = RAGCore(
-        thought=parsed.get("thought", ""),
-        entity_ids=parsed.get("entity_ids", []),
-        content=parsed.get("content", content),
-        status=parsed.get("status", "SUCCESS" if parsed.get("content") else "FAIL")
-    )
-
+    ## -- Pydantic object from LangGraph, no manual parsing
+    structured: RAGCore = result["structured_response"]
     current_worker_results = state.get("worker_results", {})
 
     return {
-        "worker_results": {**current_worker_results, "RAG": rag_res.model_dump()},
-        "status_flag": rag_res.status
+        "worker_results": {**current_worker_results, "RAG": structured.model_dump()},
+        "status_flag": structured.status,
     }
 
+
 async def rag_deep(state: AgentState, rag_agent, config):
+    """Dynamic factory: create_react_agent handles tool loop + returns structured_response."""
     rag_data: Dict[str, Any] = state.get("worker_results", {}).get("RAG", {})
     student_state = state.get("student_state", {})
     current_pos_obj = student_state.get("current_pos")
-
-    student_state_str = parse_student_state(student_state)
 
     query = state.get("user_query", state["messages"][-1].content)
 
@@ -115,34 +118,25 @@ async def rag_deep(state: AgentState, rag_agent, config):
         entity_ids=str(rag_data.get("entity_ids", []))
     )
 
-    res = await rag_agent.ainvoke(
+    ## -- Fresh react agent per call, schema-bound
+    start_create = time.time()
+    react = create_react_agent(
+        model=rag_agent.raw_model,
+        tools=rag_agent.tools,
+        prompt=rag_agent.prompt,
+        response_format=RAGDeep,
+        debug=True,
+    )
+    logger.info(f"[SMART_EDU_LOG] Node: rag_deep | Action: create_react_agent | Time: {time.time() - start_create:.4f}s")
+
+    start_invoke = time.time()
+    result = await react.ainvoke(
         {"messages": [("user", f"{prompt}\nContext: {rag_data.get('content', '')}")]},
-        config=config
+        config={"recursion_limit": 8, **config},
     )
+    logger.info(f"[SMART_EDU_LOG] Node: rag_deep | Action: ainvoke | Time: {time.time() - start_invoke:.4f}s | Result keys: {list(result.keys())}")
 
-    # Execute any tool calls the deep agent made (with config for session_id)
-    tool_output = await execute_tool_calls(res, rag_agent, config)
-
-    if tool_output and tool_output != "No tool results.":
-        synthesis_prompt = (
-            f"{prompt}\nContext: {rag_data.get('content', '')}\n\n"
-            f"Additional Tool Results:\n{tool_output}\n\n"
-            "Synthesize into final JSON answer."
-        )
-        res = await rag_agent.ainvoke(
-            {"messages": [("user", synthesis_prompt)]},
-            config=config
-        )
-
-    content = res.content if hasattr(res, 'content') else str(res)
-    from TA.edu.utils import parse_json_response
-    parsed = parse_json_response(content)
-
-    deep_res = RAGDeep(
-        is_deep=parsed.get("is_deep", False),
-        bridge_concepts=parsed.get("bridge_concepts", []),
-        knowledge_gap_score=parsed.get("knowledge_gap_score", 0.0)
-    )
+    deep_res: RAGDeep = result["structured_response"]
 
     bridge_nodes = [
         ConceptNode(name=c["name"]) if isinstance(c, dict) else ConceptNode(name=c.name)

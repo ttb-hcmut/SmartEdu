@@ -142,7 +142,7 @@ adaptive system that can handle a wide variety of queries and tasks without requ
 \\\\
 What truly pushing agentic systems to achive what LLM can't lies in the harnessing of agentic technology. Harness is the process of constructing and integrating 
 systems or infrastructure that boosts capabilities into the system. The harnessing of agentic system is critical for the agentic performance, as it enables the system 
-to navigate the complex, multi-step processes required to analyze and retrieve relevant video content based on user queries.
+to navigate the complex, multi-step processes required to analyze and retrieve relevant educational content based on user queries.
 \paragraph*{LLM: The Logical Core}
 Large Language Models (LLMs) serve as the brain of the agent, represent the thinking capability. They provide the reasoning capabilities necessary to interpret vague user queries and orchestrate the appropriate tools to find answers. The LLM is responsible for parsing the user's intent, identifying missing information, and deciding on the next actions. The reasoning and decision-making depend heavily on the type of LLM used. Upon studying the current industry, mainstream types of models include:
 \begin{itemize}
@@ -151,7 +151,7 @@ Models such as OpenAI o1 or DeepSeek R1 are optimized for Chain of Thought proce
     \item \textbf{Function Calling Models}
 Models such as GPT-4o or Claude 3.5 Sonnet are fine-tuned specifically to output structured data, such as JSON, rather than just conversational text. This capability is efficient for tool configuration and defining output formats. They are critical for the execution phase, as they can reliably select the correct tools and format the arguments precisely to query the database without syntax errors.
     \item \textbf{Multimodal Models}
-    Models such as Gemini 1.5 Pro are trained with multimodal input. These models are essential in a video analysis context because they can natively understand both text and visual inputs. This allows the agent to process image frames directly alongside the user's text query without needing a separate description tool to translate visuals into text first.
+    Models such as Gemini 1.5 Pro are trained with multimodal input. These models are essential in an educational content analysis context because they can natively understand both text and visual inputs. This allows the agent to process image frames directly alongside the user's text query without needing a separate description tool to translate visuals into text first.
     
     \item{Lightweight Efficiency Models}
     Smaller models like Llama 3 8B or GPT-4o-mini are faster and cheaper to run. They are perfect for narrow, repetitive tasks such as summarizing retrieved results or classifying user intent, where the deep reasoning capabilities of a larger model are unnecessary. Moreover, the ability to easily train and fine-tune these models facilitates customization in the design of Agentic systems.
@@ -170,7 +170,7 @@ Prompting is the primary method to instruct the agent, helping it understand the
 To maintain a coherent interaction, systems must store chat history and the current state. This allows the agent to understand follow-up questions, such as "What happened after that?", by recalling the context of previous turns. State management ensures the agent knows exactly where it is in a multi-step retrieval process, preventing redundant actions.
 
 \item \textbf{Retrieval-Augmented Generation (RAG)}
-Agents cannot remember all the information contained in massive video archives, and this data is often dynamic. Retrieval-Augmented Generation (RAG) is used to retrieve external information that is not stored within the LLM's internal weights. RAG ensures the agent gets the needed information only when requested, querying the vector database to fetch relevant video segments or metadata to ground its answers in factual evidence.
+Agents cannot remember all the information contained in massive educational repositories, and this data is often dynamic. Retrieval-Augmented Generation (RAG) is used to retrieve external information that is not stored within the LLM's internal weights. RAG ensures the agent gets the needed information only when requested, querying the vector database to fetch relevant lecture segments or metadata to ground its answers in factual evidence.
 \end{itemize}
 \paragraph*{Tool Integration}
 Represent the action capacity, tool integration is the process of connecting external resources (systems, software, hardware) or APIs to the agent, allowing it to perform specific functions that 
@@ -246,7 +246,7 @@ In the context of System Design, OOP is the dominant industry standard because t
 \end{itemize}
 
 \subsubsection{System Architecture: Microservices}
-System architecture defines the macroscopic structure of a software system, organizing its major components, inter-process communication, and load distribution. Given the necessity of building an intelligent system responsible for transferring, managing, and indexing massive volumes of educational multimedia, a monolithic architecture—where the entire application is compiled and deployed as a single unified binary—quickly becomes a massive bottleneck. To mitigate this, the system adopts a \textbf{Microservices Architecture}.
+System architecture defines the macroscopic structure of a software system, organizing its major components, inter-process communication, and load distribution. Given the necessity of building an intelligent system responsible for transferring, managing, and indexing massive volumes of educational materials, a monolithic architecture—where the entire application is compiled and deployed as a single unified binary—quickly becomes a massive bottleneck. To mitigate this, the system adopts a \textbf{Microservices Architecture}.
 \\\\
 Microservices is a design paradigm in which a complex application is decoupled into a suite of small, autonomous, and loosely coupled services. Each service is dedicated to a specific business domain, operates in its own isolated process, and interacts with other services via lightweight protocols (typically REST APIs or message brokers like RabbitMQ/Kafka). 
 
@@ -271,16 +271,16 @@ The adoption of Microservices is fundamentally driven by the need to isolate dis
 The selection of frameworks is driven by the need for high-performance Python execution and seamless integration with AI libraries. These frameworks are chosen to 
 building block for the implementation of the application layer, providing the necessary tools and abstractions to manage the complex interactions between the backend, frontend, and AI components. 
 \subsubsection{Backend Development}
-Backend development serves as the foundational logic of any software application, responsible for data processing, security, and the orchestration of communication between the database and the client. It handles the business logic that users do not see but rely upon for functionality. For a video retrieval system involving heavy AI workloads, the backend must be capable of handling high-concurrency requests without latency, ensuring that the complex computations of the agents do not block the user experience.
+Backend development serves as the foundational logic of any software application, responsible for data processing, security, and the orchestration of communication between the database and the client. It handles the business logic that users do not see but rely upon for functionality. For an intelligent educational system involving heavy AI workloads, the backend must be capable of handling high-concurrency requests without latency, ensuring that the complex computations of the agents do not block the user experience.
 \\\\To address these requirements, we utilize FastAPI, a modern web framework for building APIs with Python. While older frameworks like Django were built on synchronous standards known as WSGI, FastAPI adopts the Asynchronous Server Gateway Interface (ASGI). This approach allows the server to handle asynchronous code natively using Python's await syntax. This represents a paradigm shift for AI applications, moving away from blocking, sequential request handling to a concurrent model where I/O-bound tasks—such as waiting for an LLM response or a database query—release the CPU to handle other incoming requests, offering some key features:
 \begin{itemize}
     \item High Concurrency: By utilizing the ASGI standard, FastAPI can handle thousands of simultaneous connections (such as multiple users uploading videos or chatting with agents) without the blocking issues inherent in traditional synchronous frameworks.
     \item Data Validation: It integrates tightly with Pydantic, a data validation library. This ensures that the complex JSON outputs generated by AI agents are rigorously validated against strict schemas before being sent to the frontend, preventing runtime type errors.
-    \item Performance: Built on top of Starlette, FastAPI offers execution speeds comparable to compiled languages like Go, which is critical for minimizing the latency overhead in the video processing pipeline.
+    \item Performance: Built on top of Starlette, FastAPI offers execution speeds comparable to compiled languages like Go, which is critical for minimizing the latency overhead in the educational content processing pipeline.
 \end{itemize}
 
 \subsubsection{Frontend Development}
-Frontend development is critical as it represents the intersection between the system's logic and human interaction. It focuses primarily on user experience, translating raw data into an accessible, responsive interface. The goal is to render the application elegant, fast, and secure, abstracting the complexity of the underlying video analysis tools from the end-user. With this definition, we selected a library that prioritizes a declarative and component-based approach.
+Frontend development is critical as it represents the intersection between the system's logic and human interaction. It focuses primarily on user experience, translating raw data into an accessible, responsive interface. The goal is to render the application elegant, fast, and secure, abstracting the complexity of the underlying educational analysis tools from the end-user. With this definition, we selected a library that prioritizes a declarative and component-based approach.
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.7\textwidth]{Images/fundamental/react.png}
@@ -288,7 +288,7 @@ Frontend development is critical as it represents the intersection between the s
 \end{figure}
 React is a JavaScript library for building user interfaces, created by Meta in 2011 to address the challenges of building large-scale, dynamic web applications. Unlike previous generations of tools that relied on imperative manipulation of the browser's Document Object Model (DOM), React introduced a declarative model utilizing a Virtual DOM. This is a lightweight memory representation of the UI. When the application state changes, React calculates the difference and updates the real DOM efficiently. This approach allows developers to build complex, stateful interfaces that update in real-time without compromising performance, offering some key features:
 \begin{itemize}
-    \item Component-Oriented Architecture: React encourages breaking the UI into independent, reusable pieces called Components (e.g., a SearchBar, a VideoPlayer). This isolation allows for modular development and easier maintenance of the code.
+    \item Component-Oriented Architecture: React encourages breaking the UI into independent, reusable pieces called Components (e.g., a SearchBar, a ContentViewer). This isolation allows for modular development and easier maintenance of the code.
     \item Unidirectional Data Flow: Data flows in a single direction, from parent to child components. This structure makes the application state predictable and easier to debug, which is essential when managing the streaming data from the AI agents.
     \item Rich Ecosystem: Being a library rather than a rigid framework, React allows for the integration of specialized tools for routing, state management, and visualization, providing the flexibility needed to build a custom dashboard.
 \end{itemize}
@@ -348,13 +348,15 @@ storage technologies optimized for different data modalities.
     \hline
     \textbf{Storage Engine} & \textbf{Data Modality} & \textbf{System Role} & \textbf{Theoretical Justification} \\
     \hline
-    Relational (RDBMS) & Structured Data & User Authentication, Billing, Access Logs & Enforces ACID properties for transactional integrity and supports complex relational joins for administrative analytics. \\
+    Relational (MySQL) & Structured Data & User Authentication, Billing, Access Logs & Enforces ACID properties for transactional integrity and supports complex relational joins for administrative analytics. \\
     \hline
     NoSQL (MongoDB) & Semi-Structured Data & Semantic Metadata, Analysis Tags, JSON Outputs & Provides schema polymorphism to handle variable outputs from different AI agents (e.g., OCR vs. Object Detection) without sparse tables. \\
     \hline
-    Object Storage (MinIO) & Unstructured Binary & Raw Video Files, Extracted Frames, Audio Clips & Decouples storage from compute to prevent database bloat; utilizes Erasure Coding for high-throughput parallel streaming during ingestion. \\
+    Object Storage (MinIO) & Unstructured Binary & Lecture Materials, Educational Assets, Audio Clips & Decouples storage from compute to prevent database bloat; utilizes Erasure Coding for high-throughput parallel streaming during ingestion. \\
     \hline
-    Vector Database (e.g., Qdrant) & High-Dimensional Vectors & Embeddings Index, Semantic Search & Optimized for Approximate Nearest Neighbor (ANN) algorithms (e.g., HNSW), enabling efficient similarity search in latent spaces where traditional B-Tree indexing fails. \\
+    Vector Database (Milvus) & High-Dimensional Vectors & Embeddings Index, Semantic Search & Optimized for Approximate Nearest Neighbor (ANN) algorithms (e.g., HNSW), enabling efficient similarity search in latent spaces where traditional B-Tree indexing fails. \\
+    \hline
+    Graph Database (Neo4j) & Multi-hop Graph Data & Knowledge Graph, Prerequisite Relationships & Optimized for traversing complex relationship networks; enables recursive queries and multi-hop reasoning to connect disparate educational concepts. \\
     \hline
     \end{tabularx}
 \end{table}
@@ -363,42 +365,70 @@ storage technologies optimized for different data modalities.
 
 \subsubsection{Relational Database (RDBMS)}
 Relational Databases are mathematically founded on Set Theory and First-Order Predicate Logic. They organize data into tuples (rows) and attributes (columns) within strictly defined relations (tables). The defining characteristic of this model is the enforcement of ACID properties (Atomicity, Consistency, Isolation, Durability), which guarantees that database transactions are processed reliably.
-\\\\RDBMS is typically utilized strictly for data that requires high integrity and deterministic relationships, such as User Management and Billing. It acts as the source of truth for entity relationships, enabling complex SQL JOIN operations (e.g., selecting all videos uploaded by a specific role within a timeframe).\\\\
-The adoption of RDBMS for core administrative data offers specific advantages to system stability:
+\\\\RDBMS is typically utilized strictly for data that requires high integrity and deterministic relationships, such as User Management and Billing. It acts as the source of truth for entity relationships, enabling complex SQL JOIN operations (e.g., selecting all learning materials uploaded by a specific role within a timeframe).\\\\
+The adoption of RDBMS for core administrative data offers specific advantages to system stability.
+\subsubsection*{MySQL}
+MySQL is utilized as the primary Relational Database Management System. It handles core entities such as user accounts, roles, and administrative logs, ensuring that all structured interactions follow strict relational integrity.
 \begin{itemize}
-    \item Transactional Integrity: In a multi-user environment where credits or permissions are updated frequently, RDBMS ensures that race conditions do not occur. For instance, if a user purchases a subscription while simultaneously uploading a video, the ACID properties ensure the account balance is updated accurately before the upload permission is granted.
+    \item Transactional Integrity: In a multi-user environment where credits or permissions are updated frequently, RDBMS ensures that race conditions do not occur. For instance, if a user purchases a subscription while simultaneously uploading an educational asset, the ACID properties ensure the account balance is updated accurately before the upload permission is granted.
     \item Data Normalization: By structuring data into normalized tables (e.g., Users, Roles, Logs), redundancy is minimized. This ensures that a change in a user's details is reflected system-wide instantly, without needing to update thousands of duplicate records.
     \item Complex Querying: The robust SQL engine allows administrators to perform audit trails and analytics efficiently, such as tracking system usage patterns across different user groups, which is computationally expensive in non-relational systems.
 \end{itemize}
 
 \subsubsection{Non-Relational Database (NoSQL)}
 To address the limitations of rigid RDBMS schemas, Non-Relational databases emerged, often adhering to the CAP Theorem (Consistency, Availability, Partition Tolerance). Unlike RDBMS which prioritizes strong Consistency, NoSQL databases like MongoDB often prioritize Partition Tolerance and Availability, offering a flexible schema-less design.
-\\\\Document stores are typically the primary engine for storing the Semantic Metadata derived from video analysis. Metadata derived from video analysis is highly variable; one video might contain OCR text, while another contains only Audio Transcripts or Face Recognition data. Document stores handle these as dynamic BSON (Binary JSON) documents, allowing fields to be added on the fly without the sparse matrices typical of rigid SQL tables.\\\\
-The utilization of a Document Store is critical for the AI-driven nature of video retrieval:
+\\\\Document stores are typically the primary engine for storing the Semantic Metadata derived from educational content analysis. Metadata derived from curriculum analysis is highly variable; one resource might contain OCR text, while another contains only Audio Transcripts or Face Recognition data. Document stores handle these as dynamic BSON (Binary JSON) documents, allowing fields to be added on the fly without the sparse matrices typical of rigid SQL tables.\\\\
+The utilization of a Document Store is critical for the AI-driven nature of context retrieval:
+\subsubsection*{MongoDB}
+MongoDB serves as the high-performance document store for managing the semi-structured metadata generated by AI agents. It allows the system to store diverse analysis results—such as transcripts, OCR results, and agentic reasoning logs—within a single, flexible schema.
 \begin{itemize}
     \item Schema Agnosticism: AI agents are constantly evolving. If an "Object Detection" agent is upgraded to output new attributes (e.g., "Confidence Score" or "Bounding Box Coordinates"), Document stores allow the new data to be saved immediately without migrating the entire database schema or breaking existing application logic.
-    \item Read Performance for Aggregates: In a VideoQA scenario, the system needs to retrieve the Video Title, Description, Transcripts, and Vector IDs simultaneously. In an RDBMS, this might require joining multiple tables. In a NoSQL system, this data can be stored as a single nested document, allowing the application to retrieve the entire context of a video in a single, high-speed read operation.
-    \item Horizontal Scalability: As archives grow to thousands of hours of video, metadata storage requirements increase. Native sharding capability allows data to be distributed across multiple servers economically, ensuring lookup times remain low even as the dataset grows.
+    \item Read Performance for Aggregates: In a Knowledge-QA scenario, the system needs to retrieve the Video Title, Description, Transcripts, and Vector IDs simultaneously. In an RDBMS, this might require joining multiple tables. In a NoSQL system, this data can be stored as a single nested document, allowing the application to retrieve the entire context of a lesson in a single, high-speed read operation.
+    \item Horizontal Scalability: As archives grow to thousands of hours of lecture content, metadata storage requirements increase. Native sharding capability allows data to be distributed across multiple servers economically, ensuring lookup times remain low even as the dataset grows.
 \end{itemize}
 
-\subsubsection{High-Performance Object Storage (MiniO)}
-While RDBMS and NoSQL excel at storing alphanumeric data, they are fundamentally inefficient for storing massive binary large objects (BLOBs) like video files, leading to database bloat and performance degradation. Object Storage systems like MinIO treat data not as a file hierarchy or a table, but as discrete objects stored in a flat address space.
-\\\\High-performance architectures utilize Object Storage to handle the High Volume nature of raw video. It utilizes Erasure Coding—a mathematical algorithm that splits data into fragments and expands them with redundant data pieces—allowing for data recovery even if multiple drives fail. This approach decouples storage from compute; the heavy video artifacts are offloaded to Object Storage, while the databases store only the lightweight reference pointers (URLs) to these objects.\\\\
-Offloading binary data to Object Storage provides the infrastructure necessary for high-throughput video processing:
+\subsubsection{High-Performance Object Storage (MinIO)}
+While RDBMS and NoSQL excel at storing alphanumeric data, they are fundamentally inefficient for storing massive binary large objects (BLOBs) like lecture recordings, leading to database bloat and performance degradation. Object Storage systems like MinIO treat data not as a file hierarchy or a table, but as discrete objects stored in a flat address space.
+\\\\High-performance architectures utilize Object Storage to handle the High Volume nature of raw educational media. It utilizes Erasure Coding—a mathematical algorithm that splits data into fragments and expands them with redundant data pieces—allowing for data recovery even if multiple drives fail. This approach decouples storage from compute; the heavy educational artifacts are offloaded to Object Storage, while the databases store only the lightweight reference pointers (URLs) to these objects.\\\\
+Offloading binary data to Object Storage provides the infrastructure necessary for high-throughput educational media processing:
+\subsubsection*{MinIO}
+MinIO is deployed as a high-performance, S3-compatible object storage server. It is responsible for hosting all raw multimedia assets, including lecture videos, extracted images, and audio segments used for AI training and inference.
 \begin{itemize}
-    \item Decoupling Storage and Compute: By separating the raw files from the metadata databases, "database bloat" is prevented. This ensures that the RDBMS remains lightweight and responsive for user queries, while the Object Store handles the heavy I/O load of video streaming.
-    \item Parallel Streaming for AI Ingestion: When an Agent analyzes a video, it requires high-speed access to the file to extract frames. Object Storage supports parallelized byte-range requests, allowing the AI to read multiple parts of a video file simultaneously. This significantly reduces the time required for the ingestion and preprocessing phase compared to reading from a standard file server.
+    \item Decoupling Storage and Compute: By separating the raw files from the metadata databases, "database bloat" is prevented. This ensures that the RDBMS remains lightweight and responsive for user queries, while the Object Store handles the heavy I/O load of content streaming.
+    \item Parallel Streaming for AI Ingestion: When an Agent analyzes a lecture recording, it requires high-speed access to the file to extract frames. Object Storage supports parallelized byte-range requests, allowing the AI to read multiple parts of a media file simultaneously. This significantly reduces the time required for the ingestion and preprocessing phase compared to reading from a standard file server.
     \item Cost-Efficiency and Redundancy: Erasure Coding allows the system to survive hardware failures without data loss, while consuming less storage space than traditional replication methods. This is vital for maintaining a massive archive of media files economically.
 \end{itemize}
 \subsubsection{Vector Database}
-Traditional databases are designed for structured data and are inefficient for handling high-dimensional vector data generated by AI models. Vector databases like Qdrant are optimized for storing and querying high-dimensional vectors, which represent the semantic content of video segments. They utilize Approximate Nearest Neighbor (ANN) algorithms, such as Hierarchical Navigable Small World (HNSW) graphs, to enable efficient similarity search in latent spaces where traditional indexing methods fail.\\\\
-The Vector Database is the backbone of the Retrieval-Augmented Generation (RAG) paradigm, allowing the system to perform semantic search based on the embeddings generated by the AI agents. When a user query is processed, it is transformed into an embedding vector, which is then compared against the vectors stored in the database to retrieve the most semantically relevant video segments.\\\\
-The adoption of a Vector Database is critical for enabling the advanced retrieval capabilities required for video analysis:
+Traditional databases are designed for structured data and are inefficient for handling high-dimensional vector data generated by AI models. Vector databases are optimized for storing and querying high-dimensional vectors, which represent the semantic content of lecture segments. They utilize Approximate Nearest Neighbor (ANN) algorithms, such as Hierarchical Navigable Small World (HNSW) graphs, to enable efficient similarity search in latent spaces where traditional indexing methods fail.\\\\
+The Vector Database is the backbone of the Retrieval-Augmented Generation (RAG) paradigm, allowing the system to perform semantic search based on the embeddings generated by the AI agents. When a user query is processed, it is transformed into an embedding vector, which is then compared against the vectors stored in the database to retrieve the most semantically relevant knowledge segments.\\\\
+The adoption of a Vector Database is critical for enabling the advanced retrieval capabilities required for educational analysis:
+\subsubsection*{Milvus}
+Milvus is the chosen vector database engine for SmartEdu. It indexes high-dimensional embeddings generated from course documents and lecture transcripts, providing sub-second retrieval times for semantic similarity queries across millions of vectors.
 \begin{itemize}
-    \item Efficient Similarity Search: Traditional databases cannot efficiently query high-dimensional vectors. Vector databases
-    \item Scalability for Large Datasets: As the number of video segments grows, the vector database can scale horizontally to maintain low latency for similarity searches, ensuring that retrieval times remain fast even as the dataset expands.
-    \item Integration with AI Workflows: Vector databases are designed to integrate seamlessly with AI pipelines
-    \item Support for Dynamic Data: As new videos are ingested and analyzed, their embeddings can be added to the vector database in real-time, allowing the system to continuously evolve and improve its retrieval capabilities without downtime.
+    \item Efficient Similarity Search: Traditional databases cannot efficiently query high-dimensional vectors. Vector databases provide specialized indexing structures to handle this efficiently.
+    \item Scalability for Large Datasets: As the number of educational segments grows, the vector database can scale horizontally to maintain low latency for similarity searches, ensuring that retrieval times remain fast even as the dataset expands.
+    \item Integration with AI Workflows: Vector databases are designed to integrate seamlessly with AI pipelines, supporting real-time insertion and retrieval of embeddings.
+    \item Support for Dynamic Data: As new educational materials are ingested and analyzed, their embeddings can be added to the vector database in real-time, allowing the system to continuously evolve and improve its retrieval capabilities without downtime.
+\end{itemize}
+
+\subsubsection{Graph Database}
+While vector databases handle semantic similarity, the structural relationships between educational concepts—such as prerequisites and curriculum hierarchies—are best modeled as a graph. 
+\subsubsection*{Neo4j}
+Neo4j is utilized to store the "Backbone Graph" of the knowledge base. It represents educational entities (concepts, lessons, modules) as nodes and their pedagogical relationships as directed edges. 
+\begin{itemize}
+    \item Multi-hop Reasoning: Unlike relational databases that require expensive JOIN operations, Neo4j allows for efficient traversal of deep relationship chains. This is critical for detecting knowledge gaps that may span multiple prerequisite levels.
+    \item Cypher Query Language: The use of Cypher enables the system to express complex pedagogical patterns, such as "Find all prerequisite concepts of concept X that the student has not yet mastered," in a readable and performant manner.
+    \item Dynamic Schema: The graph model allows the knowledge structure to evolve as new educational materials are added, without needing to redefine rigid table structures.
+\end{itemize}
+
+\subsubsection{Database Management and Observation}
+Managing multiple heterogeneous database engines requires a unified observation layer to ensure data consistency and facilitate debugging during development.
+\subsubsection*{DbGate}
+DbGate is an open-source, multi-database manager used as the primary dashboard for the SmartEdu infrastructure. It provides a unified web interface to inspect and manipulate data across MySQL and MongoDB instances simultaneously.
+\begin{itemize}
+    \item Unified Interface: Reduces the overhead of switching between multiple specialized management tools.
+    \item Schema Visualizer: Helps developers understand the evolving structure of NoSQL documents and Relational tables in real-time.
+    \item Query Benchmarking: Allows for testing and optimizing complex queries before they are integrated into the application's repository layer.
 \end{itemize}
 
 \subsection{Deployment and Containerization}

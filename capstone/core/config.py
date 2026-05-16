@@ -14,9 +14,9 @@ DB_NAME = os.getenv("DB_NEO4J_DB_NAME", "test")
 @dataclass
 class App_settings:
     name = "Capstone Gateway"
-    kg_end = "/system/v1/knowledge"
-    ta_end = "/system/v1/ta"
-    stu_end = "/system/v1/student"
+    kg_end = "/system/v0/knowledge"
+    ta_end = "/system/v0/ta"
+    stu_end = "/system/v0/student"
     port = 8001
 
 
@@ -66,7 +66,7 @@ class Mongo_conf:
     user: str = os.getenv("MONGO_USER", "admin")
     passw: str = os.getenv("MONGO_PASS", "password123")
     host: str = os.getenv("MONGO_HOST", "localhost:27017")
-    uri: str = f"mongodb://{user}:{passw}@{host}"   
+    uri: str = f"mongodb://{user}:{passw}@{host}/?authSource=admin"   
     db_name: str = os.getenv("MONGO_DB_NAME", DB_NAME)
 
 # TA module
@@ -99,3 +99,12 @@ class Bloom(Enum):
 NeoStudent = Neo(db_name = "students")
 
 # Student logic
+
+# Tracing
+class Config_Tracer:
+    enable = False
+    key :str = os.getenv("LANGFUSE_SECRET_KEY", "")
+    public_key :str = os.getenv("LANGFUSE_PUBLIC_KEY", "")
+    host :str = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
+
+langfuse_config = Config_Tracer()

@@ -13,7 +13,7 @@ from TA.edu.workflow.retrieve import build_retrieve_wf
 from TA.edu.workflow.roadmap import build_roadmap_wf
 from TA.edu.workflow.teach import build_teach_wf
 
-from TA.edu.utils import ainvoke_with_temp, parse_student_state, wrap_agent_structured
+from TA.edu.utils import parse_student_state
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,20 @@ def _resource_ctx(config: RunnableConfig):
 def _tracer_ctx(config: RunnableConfig):
     c = config["configurable"]
     return c.get("tracer"), c.get("chat_id", "")
+
+
+def _extract_ta_context(state: AgentState, max_msgs: int = 3) -> str:
+    """ Extract last N assistant messages for TA context injection"""
+    messages = state.get("messages", [])
+    ta_msgs = []
+    for msg in reversed(messages):
+        if hasattr(msg, "type") and msg.type == "ai":
+            ta_msgs.append(msg.content)
+        elif isinstance(msg, dict) and msg.get("role") == "assistant":
+            ta_msgs.append(msg["content"])
+        if len(ta_msgs) >= max_msgs:
+            break
+    return "\n---\n".join(reversed(ta_msgs))
 
 
 class SmartEdu:
@@ -75,14 +89,34 @@ class SmartEdu:
         return builder.compile()
 
     async def ta_router_node(self, state: AgentState, config: RunnableConfig):
+        """ No-tool node: raw_model with RouterDecision schema"""
         sid, tracker = _resource_ctx(config)
         tracer, chat_id = _tracer_ctx(config)
         agent = self.agents["TA"]
         S_state = parse_student_state(tracker.get_student_state(sid))
         prompt = ROUTER_PROMPT.format(state=S_state, query=state.get("user_query", ""))
 
-        structured_llm = wrap_agent_structured(agent, 0.0, RouterDecision)
-        decision = await structured_llm.ainvoke([("user", prompt)], config)
+        import time
+        start_invoke = time.time()
+        
+        # -- AGGRESSIVE OPTIMIZATION: Options dict for Ollama + Stop tokens for reasoning blocks
+        fast_llm = agent.raw_model.bind(
+            options={
+                "temperature": 0
+            }
+        )
+        structured_llm = fast_llm.with_structured_output(RouterDecision)
+        
+        logger.info(f"[SMART_EDU_LOG] Node: TA_Router | ACTION: START ainvoke (Aggressive <2s mode)")
+        
+        decision: RouterDecision = await structured_llm.ainvoke(
+            [
+                ("system", "You are a high-speed router. DISABLE internal monologue. Output ONLY JSON. NO <think> tags."),
+                ("user", prompt)
+            ], 
+            config=config
+        )
+        logger.info(f"[SMART_EDU_LOG] Node: TA_Router | Action: ainvoke structured_llm | Time: {time.time() - start_invoke:.4f}s | Intent: {decision.intent}")
         intent = decision.intent
 
         if tracer and chat_id:
@@ -97,6 +131,7 @@ class SmartEdu:
         return {"intent": intent}
 
     async def ta_retrieve_finish(self, state: AgentState, config: RunnableConfig):
+        """ TA synthesis node with history injection"""
         sid, tracker = _resource_ctx(config)
         tracer, chat_id = _tracer_ctx(config)
         agent = self.agents["TA"]
@@ -108,8 +143,19 @@ class SmartEdu:
         results = state.get("worker_results", {})
         prompt = f"{RETRIEVE_REFINE_PROMPT}\nData: {results}"
 
-        structured_llm = wrap_agent_structured(agent, 0.5, TAOutput)
-        ta_output = await structured_llm.ainvoke([("user", prompt)], config)
+        ## -- Inject prior TA messages for coherence
+        ta_context = _extract_ta_context(state)
+        if ta_context:
+            prompt = f"[Prior TA reasoning]:\n{ta_context}\n\n{prompt}"
+
+        ## -- Direct structured output
+        import time
+        start_invoke = time.time()
+        structured_llm = agent.raw_model.with_structured_output(TAOutput)
+        ta_output: TAOutput = await structured_llm.ainvoke(
+            [("user", prompt)], config=config
+        )
+        logger.info(f"[SMART_EDU_LOG] Node: Finish_Node | Action: ainvoke structured_llm | Time: {time.time() - start_invoke:.4f}s")
 
         if tracer and chat_id:
             tracer.log_step(
@@ -128,6 +174,7 @@ class SmartEdu:
         return {"messages": [AIMessage(content=ta_output.message)], "pending_proposal": None}
 
     async def ta_roadmap_finish(self, state: AgentState, config: RunnableConfig):
+        """ TA synthesis node with history injection"""
         sid, tracker = _resource_ctx(config)
         tracer, chat_id = _tracer_ctx(config)
         agent = self.agents["TA"]
@@ -164,8 +211,19 @@ class SmartEdu:
         else:
             prompt = f"Friendly narrative response for this roadmap and pedagogical advice:\n{advice}"
 
-        structured_llm = wrap_agent_structured(agent, 0.6, TAOutput)
-        ta_output = await structured_llm.ainvoke([("user", prompt)], config)
+        ## -- Inject prior TA messages for coherence
+        ta_context = _extract_ta_context(state)
+        if ta_context:
+            prompt = f"[Prior TA reasoning]:\n{ta_context}\n\n{prompt}"
+
+        ## -- Direct structured output
+        import time
+        start_invoke = time.time()
+        structured_llm = agent.raw_model.with_structured_output(TAOutput)
+        ta_output: TAOutput = await structured_llm.ainvoke(
+            [("user", prompt)], config=config
+        )
+        logger.info(f"[SMART_EDU_LOG] Node: Finish_Node | Action: ainvoke structured_llm | Time: {time.time() - start_invoke:.4f}s")
 
         if tracer and chat_id:
             tracer.log_step(
@@ -184,6 +242,7 @@ class SmartEdu:
         return {"messages": [AIMessage(content=ta_output.message)], "pending_proposal": proposal}
 
     async def ta_teach_finish(self, state: AgentState, config: RunnableConfig):
+        """ TA synthesis node with history injection"""
         sid, tracker = _resource_ctx(config)
         tracer, chat_id = _tracer_ctx(config)
         agent = self.agents["TA"]
@@ -200,15 +259,26 @@ class SmartEdu:
         )
 
         prompt = (
-            "You are the TA wrapping up a lecture session.\n"
             "Below is the lecture material generated by the teaching module. "
-            "Your task is to present it to the student by outputting a JSON with 'summary' (a brief heading) "
-            f"and 'message' (the exact lecture content or a polished version of it).\n\nLecture Data:\n{teach_res}"
+            "Present it to the student with a brief heading summary "
+            f"and the lecture content (polished if needed).\n\nLecture Data:\n{teach_res}"
         )
-        structured_llm = wrap_agent_structured(agent, 0.5, TAOutput)
-        ta_output = await structured_llm.ainvoke([("user", prompt)], config)
 
-        # Auto FE navigation from Teach_Lookup data
+        ## -- Inject prior TA messages for coherence
+        ta_context = _extract_ta_context(state)
+        if ta_context:
+            prompt = f"[Prior TA reasoning]:\n{ta_context}\n\n{prompt}"
+
+        ## -- Direct structured output
+        import time
+        start_invoke = time.time()
+        structured_llm = agent.raw_model.with_structured_output(TAOutput)
+        ta_output: TAOutput = await structured_llm.ainvoke(
+            [("user", prompt)], config=config
+        )
+        logger.info(f"[SMART_EDU_LOG] Node: Finish_Node | Action: ainvoke structured_llm | Time: {time.time() - start_invoke:.4f}s")
+
+        ## -- Auto FE navigation from Teach_Lookup data
         teach_ctx = state.get("_teach_context", {})
         page = teach_ctx.get("page")
         storage_uri = teach_ctx.get("storage_uri")
@@ -302,21 +372,41 @@ class SmartEdu:
         tracer=None,
         chat_id: str = "",
         callbacks: Optional[List[Any]] = None,
+        update_callback = None,
     ):
         run_config: RunnableConfig = {
             "configurable": {
-                "session_id": session_id,       # ← Chat Session UUID, không phải student_id
+                "session_id": session_id,
                 "student_tracker": student_tracker,
                 "tracer": tracer,
                 "chat_id": chat_id,
-                "teach_tools": self.teach_tools,  # Injected for Teach_Lookup (deterministic)
+                "teach_tools": self.teach_tools,
             },
             "callbacks": callbacks or [],
         }
         try:
-            return await self.app.ainvoke(input=initial_state, config=run_config)
+            final_state = dict(initial_state)
+            async for chunk in self.app.astream(initial_state, config=run_config, stream_mode="updates"):
+                for node_name, state_update in chunk.items():
+                    if update_callback:
+                        await update_callback(node_name, state_update)
+                    # Manually merge the state_update into final_state
+                    for key, val in state_update.items():
+                        if key == "messages":
+                            if "messages" not in final_state:
+                                final_state["messages"] = []
+                            final_state["messages"].extend(val)
+                        elif isinstance(val, dict) and isinstance(final_state.get(key), dict):
+                            final_state[key].update(val)
+                        else:
+                            final_state[key] = val
+            return final_state
         except Exception as e:
-            logger.exception("SmartEdu execution failed")
+            logger.exception(
+                "SmartEdu execution FAILED | session=%s | input=%r",
+                session_id,
+                initial_state.get("user_query", "")[:120],
+            )
             if tracer and chat_id:
                 tracer.log_step(
                     chat_id=chat_id,
@@ -325,4 +415,10 @@ class SmartEdu:
                     state={},
                     output=str(e),
                 )
-            return {**initial_state, "status_flag": "FAIL"}
+            # Ensure return dict has the expected keys for TAModule.run
+            return {
+                **final_state, 
+                "status_flag": "FAIL", 
+                "_error": str(e),
+                "messages": final_state.get("messages", [])
+            }

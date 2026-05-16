@@ -8,8 +8,26 @@ services:
     env_file:
       - ../../.env
     environment:
-      # Pre-configure connections for convenience
-      - CONNECTIONS=mongo:mongodb://${MONGO_USER}:${MONGO_PASS}@mongo-core:27017,mysql:mysql://root:${MYSQL_ROOT_PASSWORD}@mysql-core:3306
+      # Connection IDs
+      CONNECTIONS: con1,con2
+
+      # MongoDB
+      LABEL_con1: MongoDB
+      SERVER_con1: mongo-core
+      PORT_con1: 27017
+      ENGINE_con1: mongo@dbgate-plugin-mongo
+      USER_con1: ${MONGO_USER}
+      PASSWORD_con1: ${MONGO_PASS}
+      DATABASE_con1: ${MONGO_DB_NAME}
+
+      # MySQL
+      LABEL_con2: MySQL
+      SERVER_con2: mysql-core
+      PORT_con2: 3306
+      ENGINE_con2: mysql@dbgate-plugin-mysql
+      USER_con2: root
+      PASSWORD_con2: ${MYSQL_ROOT_PASSWORD}
+      DATABASE_con2: ${MYSQL_DB_NAME}
     networks:
       - capstone-net
     depends_on:

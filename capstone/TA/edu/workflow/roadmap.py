@@ -1,29 +1,31 @@
+import logging
 from langgraph.graph import StateGraph, END
+from langgraph.prebuilt import create_react_agent
 from langchain_core.runnables import RunnableConfig
+
 from core.schema.wf_state import AgentState
 from TA.edu.workflow.schema import RoadmapExplore, RoadmapCritique, RoadmapFinal
 from TA.edu.workflow.prompt import ROADMAP_PROMPT
+from TA.edu.utils import filter_mastery
 
-from TA.edu.utils import *
+logger = logging.getLogger(__name__)
 
 
 def build_roadmap_wf(agents):
     builder = StateGraph(AgentState)
 
-    builder.add_node(
-        "Roadmap_Explore", 
-        lambda state, config: roadmap_explore_logic(state, agents["RAG"], config)
-    )
-    
-    builder.add_node(
-        "Roadmap_Evaluator", 
-        lambda state, config: roadmap_evaluator_logic(state, agents["TA"], config)
-    )
-    
-    builder.add_node(
-        "TA_Advice", 
-        lambda state, config: ta_advice_logic(state, agents["TA"], config)
-    )
+    async def _roadmap_explore(state, config):
+        return await roadmap_explore_logic(state, agents["RAG"], config)
+
+    async def _roadmap_evaluator(state, config):
+        return await roadmap_evaluator_logic(state, agents["TA"], config)
+
+    async def _ta_advice(state, config):
+        return await ta_advice_logic(state, agents["TA"], config)
+
+    builder.add_node("Roadmap_Explore", _roadmap_explore)
+    builder.add_node("Roadmap_Evaluator", _roadmap_evaluator)
+    builder.add_node("TA_Advice", _ta_advice)
 
     builder.set_entry_point("Roadmap_Explore")
     builder.add_edge("Roadmap_Explore", "Roadmap_Evaluator")
@@ -32,108 +34,114 @@ def build_roadmap_wf(agents):
 
     return builder.compile()
 
+
 async def roadmap_explore_logic(state: AgentState, rag_agent, config):
+    """## -- Dynamic factory: bind RoadmapExplore schema, RAG tools for exploration"""
     query = state.get("user_query", state["messages"][-1].content)
     student_state = state.get("student_state", {})
-    
     current_pos = student_state.get("current_pos")
-    
-    # Python if/else instead of asking LLM to branch
+
     if current_pos is None:
-        instruction = ROADMAP_PROMPT['explore_new'].format(
-            student_query=query
-        )
+        instruction = ROADMAP_PROMPT['explore_new'].format(student_query=query)
     else:
         instruction = ROADMAP_PROMPT['explore_existing'].format(
             current_pos=current_pos.name if hasattr(current_pos, 'name') else str(current_pos),
             student_query=query
         )
 
-    res = await rag_agent.ainvoke({"messages": [("user", instruction)]}, config=config)
+    ## -- Dynamic react agent with RoadmapExplore schema
+    react = create_react_agent(
+        model=rag_agent.raw_model,
+        tools=rag_agent.tools,
+        prompt=rag_agent.prompt,
+        response_format=RoadmapExplore,
+    )
 
-    tool_results_text = await execute_tool_calls(res, rag_agent, config)
-    if not tool_results_text.strip() or tool_results_text == "No tool results.":
-        tool_results_text = "No additional data retrieved from Neo4j."
+    result = await react.ainvoke(
+        {"messages": [("user", instruction)]},
+        config=config,
+    )
 
-
-    structured_llm = rag_agent.last.bind(temperature=0.0).with_structured_output(RoadmapExplore)
-    
-    format_prompt = f"""You are an expert educational planner.
-I have retrieved the following raw data from our Neo4j Knowledge Graph based on the student's request:
----
-{tool_results_text}
----
-
-STUDENT CONTEXT:
-- Query: {query}
-- Current Position: {current_pos if current_pos else 'null'}
-
-YOUR TASK:
-1. Analyze the raw Neo4j data above.
-2. Formulate a structured learning roadmap that directly answers the student's Query.
-3. Identify an appropriate 'start_node' (the first concept to learn, based on their Current Position).
-4. Extract the sequence of concepts as 'steps' for the roadmap.
-5. Provide a brief 'reasoning' for why this path is chosen.
-
-CRITICAL:
-- ONLY use concepts that exist in the provided Neo4j data.
-- Output MUST be structured exactly as the RoadmapExplore schema requires.
-"""
-    
-    final_res = await structured_llm.ainvoke([("user", format_prompt)], config=config)
-    
-    
-    compact_data = compact_explore(raw_tool_output=tool_results_text)
-    
-    roadmap_dict = final_res.model_dump()
-    roadmap_dict["raw_context"] = compact_data
-    
+    ## -- Extract validated Pydantic object
+    structured: RoadmapExplore = result["structured_response"]
     current_results = state.get("worker_results", {})
+
     return {
-        "worker_results": {**current_results, "Roadmap": roadmap_dict},
-        "status_flag": "SUCCESS"
+        "worker_results": {**current_results, "Roadmap": structured.model_dump()},
+        "messages": [{"role": "assistant", "content": structured.ai_message}],
+        "status_flag": "SUCCESS",
     }
 
+
 async def roadmap_evaluator_logic(state: AgentState, ta_agent, config: RunnableConfig):
-    from TA.edu.utils import filter_mastery
-    
+    """## -- No-tool node: raw_model with RoadmapCritique schema"""
     current_results = state.get("worker_results", {})
     roadmap_data = current_results.get("Roadmap", {})
     student_state = state.get("student_state", {})
     mastery_map = student_state.get("mastery_map", {})
-    
+
     relevant_mastery = filter_mastery(roadmap_data, mastery_map)
-    
+
     instruction = ROADMAP_PROMPT['evaluate'].format(
         proposed_steps=roadmap_data.get("steps", []),
         student_mastery=relevant_mastery,
         course_relevance=roadmap_data.get("raw_context", "")
     )
-    
-    structured_llm = ta_agent.with_structured_output(RoadmapCritique)
-    res = await structured_llm.ainvoke({"messages": [("user", instruction)]}, config=config)
-    
-    updated_roadmap = {**roadmap_data, "critique": res.model_dump()}
+
+    ## -- Direct structured output, no tool loop
+    structured_llm = ta_agent.raw_model.with_structured_output(RoadmapCritique)
+    critique: RoadmapCritique = await structured_llm.ainvoke(
+        [("user", instruction)], config=config
+    )
+
+    updated_roadmap = {**roadmap_data, "critique": critique.model_dump()}
+    return {
+        "worker_results": {**current_results, "Roadmap": updated_roadmap},
+        "messages": [{"role": "assistant", "content": critique.ai_message}],
+    }
 
 
-    return {"worker_results": {**current_results, "Roadmap": updated_roadmap}}
 async def ta_advice_logic(state: AgentState, ta_agent, config: RunnableConfig):
+    """## -- No-tool node: raw_model with RoadmapFinal schema, TA history injected"""
     current_results = state.get("worker_results", {})
     roadmap_data = current_results.get("Roadmap", {})
     critique = roadmap_data.get("critique", {})
-    
+
     critique_str = f"Feasible: {critique.get('is_feasible')}\nReasoning: {critique.get('reasoning')}"
-    
+
     instruction = ROADMAP_PROMPT['advice'].format(
         backbone=roadmap_data.get('steps', []),
         critique=critique_str
     )
-    
-    structured_llm = ta_agent.with_structured_output(RoadmapFinal)
-    res = await structured_llm.ainvoke({"messages": [("user", instruction)]}, config=config)
-    
-    updated_roadmap = {**roadmap_data, "advice": res.model_dump()}
+
+    ## -- Inject prior TA messages for coherence (TA model only)
+    ta_context = _extract_ta_context(state)
+    if ta_context:
+        instruction = f"[Prior TA reasoning]:\n{ta_context}\n\n{instruction}"
+
+    ## -- Direct structured output, no tool loop
+    structured_llm = ta_agent.raw_model.with_structured_output(RoadmapFinal)
+    advice: RoadmapFinal = await structured_llm.ainvoke(
+        [("user", instruction)], config=config
+    )
+
+    updated_roadmap = {**roadmap_data, "advice": advice.model_dump()}
     return {
-        "worker_results": {**current_results, "Roadmap": updated_roadmap}, 
-        "status_flag": "SUCCESS"
+        "worker_results": {**current_results, "Roadmap": updated_roadmap},
+        "messages": [{"role": "assistant", "content": advice.ai_message}],
+        "status_flag": "SUCCESS",
     }
+
+
+def _extract_ta_context(state: AgentState, max_msgs: int = 3) -> str:
+    """## -- Extract last N assistant messages from state for TA context injection"""
+    messages = state.get("messages", [])
+    ta_msgs = []
+    for msg in reversed(messages):
+        if hasattr(msg, "type") and msg.type == "ai":
+            ta_msgs.append(msg.content)
+        elif isinstance(msg, dict) and msg.get("role") == "assistant":
+            ta_msgs.append(msg["content"])
+        if len(ta_msgs) >= max_msgs:
+            break
+    return "\n---\n".join(reversed(ta_msgs))

@@ -1,4 +1,6 @@
 
+import logging
+import logging.config
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
@@ -18,6 +20,20 @@ from core.config import *
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # ── Logging setup ──────────────────────────────────────────────────────────
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        handlers=[
+            logging.StreamHandler(),
+        ],
+    )
+    # Silence overly chatty third-party libs
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("langchain").setLevel(logging.WARNING)
+    logging.getLogger("langgraph").setLevel(logging.WARNING)
 
     llm = CoreLLMEngine()
     graph_db = GraphDB(config=Neo())
@@ -52,6 +68,7 @@ async def lifespan(app: FastAPI):
     )
     app.state.TA = ta
     app.state.student_tracker = student_tracker
+    app.state.ta_tasks: dict = {}   # task_id -> {status, result|error}
     yield
     
     knowledge_mod.close()
