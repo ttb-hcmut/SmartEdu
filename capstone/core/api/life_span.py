@@ -34,6 +34,7 @@ async def lifespan(app: FastAPI):
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("langchain").setLevel(logging.WARNING)
     logging.getLogger("langgraph").setLevel(logging.WARNING)
+    logging.getLogger("neo4j.notifications").setLevel(logging.WARNING)
 
     llm = CoreLLMEngine()
     graph_db = GraphDB(config=Neo())

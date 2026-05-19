@@ -100,3 +100,35 @@ class Mongo_DB:
         if not doc or "memo" not in doc:
             return []
         return doc["memo"].get(session_id, [])
+
+    def push_session_tool_result(
+        self, student_id: str, session_id: str, chat_id: str, entry: dict
+    ) -> None:
+        """Atomically append one tool result entry via $push — concurrent-safe."""
+        entry_with_ts = {**entry, "timestamp": datetime.datetime.utcnow().isoformat()}
+        self.students.update_one(
+            {"_id": student_id},
+            {"$push": {f"session_context.{session_id}.tool_results.{chat_id}": entry_with_ts}},
+            upsert=True,
+        )
+
+    def push_session_thought(
+        self, student_id: str, session_id: str, chat_id: str, entry: dict
+    ) -> None:
+        """Atomically append one thought entry via $push — concurrent-safe."""
+        entry_with_ts = {**entry, "timestamp": datetime.datetime.utcnow().isoformat()}
+        self.students.update_one(
+            {"_id": student_id},
+            {"$push": {f"session_context.{session_id}.thoughts.{chat_id}": entry_with_ts}},
+            upsert=True,
+        )
+
+    def get_session_context(self, student_id: str, session_id: str) -> dict:
+        """Load persisted SessionContext data (tool_results + thoughts), returns empty dict if none."""
+        doc = self.students.find_one(
+            {"_id": student_id},
+            {f"session_context.{session_id}": 1},
+        )
+        if not doc:
+            return {}
+        return doc.get("session_context", {}).get(session_id, {})

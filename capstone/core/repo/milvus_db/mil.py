@@ -1,4 +1,5 @@
 import time
+import logging
 from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
 from typing import List, Dict
 from core.config import Mil_conf
@@ -27,10 +28,10 @@ class MilvusDB:
                     host=self.host, 
                     port=self.port
                 )
-                print(f"Milvus connected to {self.host}:{self.port}")
+                logging.info(f"Milvus connected to {self.host}:{self.port}")
                 return
             except Exception as e:
-                print(f"Attemps {i+1}: Milvus is not ready... {e}")
+                logging.error(f"Attemps {i+1}: Milvus is not ready... {e}")
                 time.sleep(self.delay)
         raise Exception("Milvus is cooked and so am I!")
 

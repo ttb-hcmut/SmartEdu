@@ -1,4 +1,5 @@
 import os
+import logging
 from typing import List, Dict, Optional
 from neo4j import GraphDatabase
 from time import time
@@ -49,7 +50,7 @@ class GraphDB:
                 session.execute_write(self._insert_edges, edges)
             if clusters:
                 session.execute_write(self._insert_clusters, clusters)
-        print(f"Graph inserted in {time() - start}")
+        logging.info(f"Graph inserted in {time() - start}")
 
     @staticmethod
     def _insert_nodes(tx, nodes: List[Dict]) -> None:

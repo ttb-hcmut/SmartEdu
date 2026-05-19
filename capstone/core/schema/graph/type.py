@@ -35,6 +35,9 @@ class RhetoricalRole(str, Enum):
     STATEMENT = "Statement"
 
     QUIZ = "Quiz"
+    
+    DEFINITION = "Definition"
+    THEOREM = "Theorem"
 
 class NodeType(str, Enum):
     COMMUNITY = "Community"
@@ -45,6 +48,8 @@ class NodeType(str, Enum):
 
 class EdgeType(str, Enum):
     PART_OF = "PART_OF"
+    RELATED_TO = "RELATED_TO"
+    PREREQUISITE_OF = "PREREQUISITE_OF"
     
     
 

@@ -38,7 +38,7 @@ class AgentOutput(BaseModel):
 
 class TAOutput(BaseModel):
     summary: str = Field(description="Short summary for memo heading")
-    message: str = Field(description="Full message shown to user")
+    message: str = Field(description="Full answer to user query")
     ui_action: Optional[Dict[str, Any]] = Field(default=None, description="Frontend action, e.g. {'navigate_page': 5, 'document': '...'}")
 
 class AgentState(TypedDict):
@@ -49,6 +49,7 @@ class AgentState(TypedDict):
     status_flag: str
     worker_results: Dict[str, AgentOutput]
     user_query: str
+    language: str                             # "vn" | "eng" — bilingual toggle from API
     pending_proposal: Optional[Dict[str, Any]]
     ui_action: Optional[Dict[str, Any]]
     _teach_mode: Literal["LECTURE", "REVIEW", "QUIZ", "IDLE"]

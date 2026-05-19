@@ -72,13 +72,13 @@ class Mongo_conf:
 # TA module
 ## Logic Layer
 
-from core.llm.prompt.agents import RAG_PROMPT, TA_PROMPT, GEN_PROMPT,EVAL_PROMPT
+from core.llm.prompt.agents import RAG_PROMPT, TA_PROMPT, GEN_PROMPT,EVAL_PROMPT,WORKER_PROMPT
 # from core.schema.wf_state import RAGOutput
 class TA_conf:
     AGENTS = [("TA",TA_PROMPT,None ) , 
              ("Generator", GEN_PROMPT, None), 
              ("RAG", RAG_PROMPT, None)
-             ]
+            ]
 # ("Evaluator", EVAL_PROMPT, None)
 @dataclass
 class TA_serv:
@@ -108,3 +108,4 @@ class Config_Tracer:
     host :str = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
 
 langfuse_config = Config_Tracer()
+TEST_LOG = True
