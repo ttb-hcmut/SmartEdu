@@ -15,6 +15,7 @@ uv.lock
 
 test/
 
+
 # Secrets & local DB
 .env
 *.db
