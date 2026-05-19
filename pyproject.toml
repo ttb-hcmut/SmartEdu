@@ -40,6 +40,7 @@ dependencies = [
     "pymongo>=4.11.1",
     "PyJWT>=2.10.1",
     "python-multipart>=0.0.28",
+    "json-repair>=0.44.1",
 ]
 [[tool.uv.index]]
 name = "pytorch-cu124"
