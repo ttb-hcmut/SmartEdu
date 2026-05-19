@@ -1,7 +1,8 @@
 from typing import List, Dict
 from TA.tools.neo.retriever import EntityFinder, RhetoricalRetriever, EdgeExplorer
 from TA.tools.neo.explore import RecommendNew, CourseBackbone, CourseRelevance, OptimalPath
-from TA.tools.minio.pdf_tools import GetConcept, GetPages
+from TA.tools.minio.pdf_tools import GetConcept, GetPages, FEToPage
+from TA.tools.context_tools import RecallToolResults, RecallThoughts
 
 from core.repo.graph.graphdb import GraphDB
 
@@ -32,9 +33,20 @@ class ToolFactory:
         ]
 
     def get_teach_tools(self) -> List:
+        """
+        TA agent tools (always bound at startup, context injected via ContextVar per-request):
+        - get_concept_page        : find which PDF page a concept is on
+        - get_pdf_pages           : read actual page content (TA must call this before lecturing)
+        - navigate_frontend_page  : signal FE to navigate to a page
+        - recall_tool_results     : retrieve recent tool outputs from session context
+        - recall_thoughts         : retrieve recent agent reasoning from session context
+        """
         return [
             GetConcept(engine=self.graph_db),
             GetPages(minio=self.minio),
+            FEToPage(),
+            RecallToolResults(),
+            RecallThoughts(),
         ]
 
     def get_teach_lookup_tools(self) -> Dict:
@@ -43,7 +55,7 @@ class ToolFactory:
             "get_concept": GetConcept(engine=self.graph_db),
             "get_pages": GetPages(minio=self.minio),
         }
-    
+
     def get_tools(self, agent_name: str):
         if agent_name not in self.agent_tools:
             print(f"Unknown agent: {agent_name}")

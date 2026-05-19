@@ -8,10 +8,8 @@ class EntityInput(BaseModel):
     entity_name: str = Field(description="Name of entity")
 
 class ContentInput(BaseModel):
-    node_id: str = Field(description="ID")
-    role: Optional[str] = Field(default=None, description="Rhetorical Role: Definition, Example, Objective, Problem, Statement. Leave empty for all.")
-    limit: int = Field(default=5, description="Limit of results")
-
+    node_id: str = Field(description="Internal Graph ID of the concept")
+    limit: int = Field(default=10, description="Limit of results")
 class ExplorerInput(BaseModel):
     node_id: str = Field(description="ID của node gốc để tìm kiếm các thực thể liên quan qua các cạnh.")
 

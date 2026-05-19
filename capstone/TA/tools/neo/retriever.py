@@ -42,8 +42,9 @@ class RhetoricalRetriever(NeoTool):
     description: str = "Retrieve educational content using Node ID and rhetorical role."
     args_schema: Type[BaseModel] = ContentInput
 
-    def _run(self, node_id: str, role: Optional[str] = None, limit: int = 5):
-        print(f"Run {self.name} with role {role} limit {limit}")
+    def _run(self, node_id: str, role: Optional[str] = None, limit: int = 10):
+        print(f"Run {self.name} with node_id {node_id}, role {role}, limit {limit} | Fetching content...")
+        
         if role:
             cypher = """
             MATCH (n:Entity {id: $id})-[:CONTENT]->(c:Entity)
@@ -62,14 +63,12 @@ class RhetoricalRetriever(NeoTool):
         print("Result: ", results)
         
         if not results:
-            role_msg = f" for role '{role}'" if role else ""
-            return f"INFO: No content found{role_msg} on node {node_id}."
+            return f"INFO: No content found on node {node_id}."
         
         content_text = "\n".join([f"- [{r['role']}] {r['content']}" for r in results])
-        role_msg = f" ({role})" if role else " (ALL)"
-        return f"SOURCE_DATA{role_msg} for {node_id}:\n{content_text}"
+        return f"SOURCE_DATA (ALL) for {node_id}:\n{content_text}"
 
-    async def _arun(self, node_id: str, role: Optional[str] = None, limit: int = 5):
+    async def _arun(self, node_id: str, role: Optional[str] = None, limit: int = 10):
         return self._run(node_id, role, limit)
     
 class EdgeExplorer(NeoTool):
