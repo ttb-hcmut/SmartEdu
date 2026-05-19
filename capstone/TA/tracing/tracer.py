@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Literal
 
 from TA.tracing.schema import ChatTrace, StepTrace, TraceSession
 from TA.tracing.writer import TraceWriter
@@ -190,3 +190,41 @@ class AgentTracer:
                 logger.warning(f"[AgentTracer] Langfuse flush failed: {e}")
 
         return path
+
+    @staticmethod
+    def logging(data: Any, type: Literal["err", "info"] = "info", file_name: Optional[str] = None):
+        import json
+        if not file_name:
+            return
+
+        log_dir = "test/TA/logs"
+        if not file_name.endswith((".log", ".logs", ".json")):
+            file_name = f"{file_name}.json"
+        filepath = os.path.join(log_dir, file_name)
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+        if isinstance(data, str):
+            if len(data) > 400:
+                processed_s = f"{data[:200]}......{data[-200:]}"
+            else:
+                processed_s = data
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            prefix = f"[{timestamp}] [{type.upper()}] "
+            with open(filepath, "a", encoding="utf-8") as f:
+                f.write(f"{prefix}{processed_s}\n")
+        elif isinstance(data, dict):
+            existing_data = []
+            if os.path.exists(filepath):
+                try:
+                    with open(filepath, "r", encoding="utf-8") as f:
+                        content = f.read().strip()
+                        if content:
+                            existing_data = json.loads(content)
+                            if not isinstance(existing_data, list):
+                                existing_data = [existing_data]
+                except Exception:
+                    existing_data = []
+            
+            existing_data.append(data)
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(existing_data, f, ensure_ascii=False, indent=4)
