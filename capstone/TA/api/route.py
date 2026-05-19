@@ -13,6 +13,7 @@ router = APIRouter()
 class ChatRequest(BaseModel):
     session_id: str      # Chat Session UUID — opaque, issued by POST /student/session/start
     user_input: str
+    language: str = "vn"  # "vn" | "eng" — bilingual toggle
 
 
 class ChatResponse(BaseModel):
@@ -54,7 +55,7 @@ def _get_session_id(payload: ChatRequest, request: Request, current_student: Use
     return payload.session_id
 
 
-async def _run_ta_task(app_state, task_id: str, user_input: str, session_id: str):
+async def _run_ta_task(app_state, task_id: str, user_input: str, session_id: str, language: str = "vn"):
     async def update_status(node_name: str, state_update: dict):
         current_status = app_state.ta_tasks.get(task_id, {})
         app_state.ta_tasks[task_id] = {
@@ -67,7 +68,7 @@ async def _run_ta_task(app_state, task_id: str, user_input: str, session_id: str
 
     try:
         ta_module = app_state.TA
-        result = await ta_module.run(user_input=user_input, session_id=session_id, update_callback=update_status)
+        result = await ta_module.run(user_input=user_input, session_id=session_id, update_callback=update_status, language=language)
         current_status = app_state.ta_tasks.get(task_id, {})
         app_state.ta_tasks[task_id] = {
             **current_status,
@@ -108,7 +109,7 @@ async def chat_with_ta(
         request.app.state.ta_tasks[task_id] = {"status": "working", "agent_name": "TA_Router (Thinking...)"}
 
         asyncio.create_task(
-            _run_ta_task(request.app.state, task_id, payload.user_input, session_id)
+            _run_ta_task(request.app.state, task_id, payload.user_input, session_id, payload.language)
         )
         logger.info("TA task %s scheduled for session %s.", task_id, session_id)
         return ChatAcceptedResponse(task_id=task_id)

@@ -1,10 +1,12 @@
 from TA.agent.injector import AgentInjector
 from TA.tools.factory import ToolFactory
+from TA.tools.context_tools import _current_session_context
 from TA.edu.smart_edu import SmartEdu
 from TA.tracing import AgentTracer
 from langchain_core.messages import HumanMessage, SystemMessage, BaseMessage, AIMessage
 from core.schema.wf_state import AgentState, TAOutput
 from student.Student_Tracker import Student_Tracker
+import asyncio
 
 
 class TAModule:
@@ -30,15 +32,20 @@ class TAModule:
             self._tracers[session_id] = AgentTracer(session_id=session_id)
         return self._tracers[session_id]
 
-    async def run(self, user_input: str, session_id: str, update_callback=None):
-        """
-        Chạy TA workflow cho một chat session.
-        TAModule chỉ nhận session_id — không biết student là ai.
-        """
+    async def run(self, 
+                    user_input: str, 
+                    session_id: str, 
+                    update_callback=None,
+                    language: str = "vn"):
+
         session = self.student_tracker.get_session(session_id)
         tracer = self._get_tracer(session_id)
 
         chat_id = tracer.begin_chat(query=user_input)
+
+        # Bug 3 fix: use session.context directly (loaded from MongoDB on session init)
+        student_id = self.student_tracker._resolve(session_id)
+        session_context = session.context
 
         await session.memo.save({
             "role": "student",
@@ -60,21 +67,29 @@ class TAModule:
             "thought": "",
             "status_flag": "On-going",
             "user_query": user_input,
+            "language": language,
         }
 
         callbacks = []
         if tracer.langfuse_handler:
             callbacks.append(tracer.langfuse_handler)
 
-        final_state = await self.engine.execute(
-            initial_state=initial_state,
-            session_id=session_id,
-            student_tracker=self.student_tracker,
-            tracer=tracer,
-            chat_id=chat_id,
-            callbacks=callbacks,
-            update_callback=update_callback,
-        )
+        # Bug 2 fix: inject session_context via ContextVar (async-safe, picked up by context tools)
+        _ctx_token = _current_session_context.set(session_context)
+        try:
+            final_state = await self.engine.execute(
+                initial_state=initial_state,
+                session_id=session_id,
+                student_id=student_id,
+                student_tracker=self.student_tracker,
+                session_context=session_context,
+                chat_id=chat_id,
+                tracer=tracer,
+                callbacks=callbacks,
+                update_callback=update_callback
+            )
+        finally:
+            _current_session_context.reset(_ctx_token)
 
         if final_state.get("status_flag") == "FAIL":
             error_msg = final_state.get("_error", "Unknown TA workflow error.")
