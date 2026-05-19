@@ -7,6 +7,7 @@ from core.repo.sql.sql_db import SQL_DB
 from core.repo.nosql.mongo_db import Mongo_DB
 from core.schema.wf_state import ConceptNode, StudentState, LearningProposal
 from student.memo import *
+from student.session_context import SessionContext
 
 NONE_LENGTH = 20
 
@@ -21,11 +22,12 @@ class Page(BaseModel):
         return f"Page {self.page}: {self.content[:50]}... Concepts: {self.concept}"
 
 class StudentSession:
-    def __init__(self, student_id: str, student_state: StudentState, memo: Memo):
+    def __init__(self, student_id: str, student_state: StudentState, memo: Memo, context: SessionContext):
         self.student_id = student_id
         self.student_state = student_state
         self.recent_pages: deque = deque(maxlen=5)
         self.memo = memo
+        self.context = context
         
 class Student_Tracker:
     """
@@ -80,8 +82,8 @@ class Student_Tracker:
     def get_student_state(self, session_id: str) -> StudentState:
         return self.get_session(session_id).student_state
 
-    def get_chat_history(self, session_id: str) -> str:
-        return self.get_session(session_id).memo.get_formatted_history()
+    def get_chat_history(self, session_id: str, mode: str = "full") -> str:
+        return self.get_session(session_id).memo.get_formatted_history(mode=mode)
 
     def get_mastery(self, session_id: str, node_name: str) -> int:
         student_id = self._resolve(session_id)
@@ -207,7 +209,7 @@ class Student_Tracker:
 
         # 2. Lấy hoặc tạo session-specific object
         if session_id not in self._sessions:
-            history = self.mongodb.get_recent_history(student_id, 6, session_id)
+            history = self.mongodb.get_recent_history(student_id, 5, session_id)
             memo = Memo(
                 session_history=history,
                 session_id=session_id,
@@ -215,7 +217,14 @@ class Student_Tracker:
                     student_id, entry, sid
                 ),
             )
-            self._sessions[session_id] = StudentSession(student_id, state, memo)
+            # Load persisted SessionContext, or create fresh
+            ctx_data = self.mongodb.get_session_context(student_id, session_id)
+            context = (
+                SessionContext.from_dict(session_id, ctx_data)
+                if ctx_data
+                else SessionContext(session_id=session_id)
+            )
+            self._sessions[session_id] = StudentSession(student_id, state, memo, context)
         
         return self._sessions[session_id]
 
