@@ -1,35 +1,37 @@
-# TA/edu/workflow/prompt.py
-## -- All JSON format instructions removed; Pydantic schemas enforce structure
-## -- Expert/self-aggrandizing claims removed
-## -- Prompts describe incoming context where applicable
 
-# TA as a Router
 _ROUTER_PROMPT = """
-Query: {query}
-Student State: {state}
-Analyze student query + StudentState to classify intent. Output EXACTLY one keyword.
+{language_instruction}
+
+[Student State]: {state}
+[Chat History]: {history}
+[Query]: {query}
+
+Classify into ONE intent: retrieve | roadmap | teaching | confirm | unknown
 
 RULES:
-- `retrieve`: Factual lookup. Student asks WHAT/WHY/HOW about a specific concept.
-  "SVM là gì?" → retrieve | "Fibonacci ứng dụng gì trong ML?" → retrieve
-- `roadmap`: Learning path. Student wants to PLAN what to learn or compare topics.
-  "Tôi muốn học Deep Learning" → roadmap | "Nên bắt đầu từ đâu?" → roadmap
-- `teaching`: In-depth lecture. Student wants to LEARN a concept deeply (not just definition).
-  "Dạy tôi về CNN" → teaching | "Giải thích cơ chế backpropagation" → teaching
-- `confirm`: Student agrees to a pending learning proposal.
-  "đồng ý" → confirm | "ok" → confirm | "chấp nhận" → confirm | "apply" → confirm
-- `clarify`: Ambiguous/off-topic. You cannot determine intent.
-  "Cái này khó quá" → clarify | "abc" → clarify
+- retrieve : factual question (what/why/how/compare/list about a concept)
+- roadmap  : planning what to study, asking for learning paths, OR expressing a desire to start learning a new topic/course (e.g., "I want to learn X", "Bắt đầu học Y")
+- teaching : deep lecture or continue/review current lesson
+- confirm  : affirmative response AND student_state has pending_proposal
+- unknown  : off-topic, gibberish, or no clear learning intent
 
-PRIORITY: If student_state has pending_proposal AND query is affirmative → `confirm`.
-If student_state.current_pos exists AND query asks for depth → `teaching`.
-If student_state is empty AND query is broad → `roadmap`.
-If in doubt between retrieve/teaching → `retrieve` (safer, can escalate later).
+CRITICAL — check state + history before deciding:
+- "Ok/Sure/Yes" → confirm ONLY if pending_proposal is set in state
+- "Continue/Tiếp tục" → teaching if lesson is active in history, else roadmap
+- Short vague refs ("this", "more", "cái đó") → check history for referent; if none, unknown
+
+EXAMPLES (S=state hint, H=last TA message):
+{few_shot}
+
+Output thought and EXACTLY one word: retrieve, roadmap, teaching, confirm, or unknown
 """
+
 
 # --- WF1: RETRIEVE ---
 
 _RETRIEVE_REFINE_PROMPT = """
+{language_instruction}
+
 You received retrieval results from the RAG agent. Synthesize them into a pedagogical response.
 
 CONTEXT PROVIDED:
@@ -38,17 +40,36 @@ CONTEXT PROVIDED:
 
 YOUR TASK:
 1. If RAG found content (status=SUCCESS):
-   - Present the factual answer clearly using VN-EN-VN terminology
-   - If bridge_concepts exist: mention prerequisite gaps
-   - If is_deep=true: warn student about knowledge distance and suggest learning path
+   - Present the factual answer clearly, using beautiful Markdown format with clear spacing, lists, and headings.
+   - If bridge_concepts exist: mention prerequisite gaps and explain them pedagogicaly.
+   - If is_deep=true: warn student about knowledge distance and suggest a helpful learning path.
 2. If RAG found nothing (status=FAIL or content is empty):
-   - Tell student: "Thông tin này chưa có trong hệ thống. Bạn có thể diễn đạt lại?"
-   - Do NOT fabricate an answer
+   - Politely tell student the topic was not found in the knowledge base and invite them to rephrase or ask about related topics.
+   - Do NOT fabricate an answer under any circumstances.
 
-STYLE: Objective, professional, pedagogical. Use trilingual terms for key concepts.
+RESPONSE GUIDELINES:
+- **Tone & Style**: Maintain an encouraging, professional, and pedagogical tone. Be supportive and friendly.
+- **Trilingual Technical Terms**: You MUST use trilingual terms for key concepts/technical words using the structure: Term (English_Term - Term) e.g., "Mạng nơ-ron (Neural Network - Mạng nơ-ron)".
+- **Visual Presentation**: Present all answers using scientific, structured, and visually clean Markdown. Use bullet points and appropriate headings.
+
+OUTPUT FORMAT:
+You must output a valid JSON object matching the TAOutput schema:
+- "summary": A very short summary of the explanation (1 sentence max).
+- "message": The full factual/pedagogical answer to the student (using Markdown).
+- "ui_action": null or a frontend navigation JSON dict.
+
+EXAMPLE OUTPUT:
+{
+  "summary": "Giải thích khái niệm Support Vector Machine (SVM)",
+  "message": "SVM là một thuật toán học máy giám sát...",
+  "ui_action": null
+}
 """
 
-_DEEP_CHECK_PROMPT = """Based on the student's query and the RAG retrieval result, decide: does this need DEEP analysis?
+_DEEP_CHECK_PROMPT = """
+{language_instruction}
+
+Based on the student's query and the RAG retrieval result, decide whether to go DEEP or SKIP.
 
 QUERY: {query}
 RAG RESULT SUMMARY: {rag_summary}
@@ -57,33 +78,41 @@ STUDENT POSITION: {current_pos}
 DEEP = Student is asking about mechanisms, detailed processes, or concepts far from their current knowledge.
 SKIP = Student asked a simple factual question (definition, example, quick lookup) that RAG already answered.
 
-Examples:
-- "Fibonacci có ứng dụng gì trong ML?" + RAG found answer → SKIP
-- "Cơ chế cụ thể của mạng nơ ron" + student at beginner level → DEEP  
-- "SVM là gì?" + RAG returned definition → SKIP
-- "So sánh Gradient Descent và Adam Optimizer" + RAG found both → DEEP
+You must output a JSON object with EXACTLY three keys:
+- "thought": A brief reasoning for your strategy, action and answer.
+- "answer": A direct answer to the query based on the text.
+- "decision": Either "DEEP" or "SKIP".
 
-Output EXACTLY one word: DEEP or SKIP"""
+Examples of valid JSON outputs:
+- "Fibonacci có ứng dụng gì trong ML?" + RAG found answer → {{"thought": "Simple factual application query, RAG already found the complete answer.", "answer": "Fibonacci được dùng trong tối ưu hóa...", "decision": "SKIP"}}
+- "Cơ chế cụ thể của mạng nơ ron" + beginner level → {{"thought": "Student asks for a detailed mechanism and requires deep explanation.", "answer": "Mạng nơ ron hoạt động dựa trên...", "decision": "DEEP"}}
+- "SVM là gì?" + RAG returned definition → {{"thought": "Basic definition query, RAG already retrieved the definition.", "answer": "SVM là thuật toán phân loại...", "decision": "SKIP"}}
+"""
 
 _RESEARCH_STRATEGY_PROMPT = {
     "core": """
-You are retrieving factual information from the Knowledge Graph.
+{language_instruction}
+
+You are a Knowledge Retriever. Your goal is to find facts and SUBMIT them.
+
+AVAILABLE TOOLS:
+- `entity_finder`: Resolve concept name → graph ID.
+- `rhetorical_retriever`: Fetch ALL educational content using the ID.
+- `RAGCore`: The final submission tool. YOU MUST CALL THIS TO EXIT.
 
 PROCEDURE:
-1. DECOMPOSE the query into key technical concepts.
-2. For EACH concept:
-   a. Call `entity_finder(concept_name)` to get its graph ID.
-   b. Call `rhetorical_retriever(node_id, role)` for relevant content.
-      - Use role="Definition" for "what is" questions
-      - Use role="Application" for "usage/example" questions  
-      - Use role="Statement" for "how it works" questions
-   c. Call `edge_explorer(node_id)` if relationships are needed.
-3. SYNTHESIZE results.
+1. Call `entity_finder(concept_name)` to get the graph ID.
+2. Call `rhetorical_retriever(node_id)` to fetch all available content for that ID.
+3. IMMEDIATELY call the `RAGCore` tool with your findings. This is mandatory to stop.
 
-IF entity_finder returns "not found": Report it, do NOT guess IDs.
-IF rhetorical_retriever returns empty: Try a different role before giving up.
+RULES:
+- Do NOT search for secondary concepts. Focus on the primary query.
+- As soon as you receive `SOURCE_DATA (ALL)`, you MUST call `RAGCore` to exit.
+- MAX 4 tool calls total.
 """,
     "deep": """
+{language_instruction}
+
 CONTEXT: The RAG core step already retrieved basic content for query: {query}
 Student current position: {current_pos}
 Retrieved entity IDs: {entity_ids}
@@ -107,6 +136,8 @@ IF is_deep = false:
 # --- WF2: ROADMAP ---
 _ROADMAP_PROMPT = {
     "explore_new": """
+{language_instruction}
+
 INPUT: query={student_query}
 
 CONTEXT: Student has NO current learning position. They need a starting point.
@@ -128,6 +159,8 @@ EXAMPLES:
 """,
 
     "explore_existing": """
+{language_instruction}
+
 INPUT: current_pos={current_pos}, query={student_query}
 
 CONTEXT: Student is currently at '{current_pos}' and wants to plan a learning path.
@@ -149,6 +182,8 @@ EXAMPLES:
 """,
 
     "evaluate": """
+{language_instruction}
+
 INPUT:
 - Proposed Steps (Backbone Hubs): {proposed_steps}
 - Student Mastery: {student_mastery}
@@ -174,6 +209,8 @@ EXAMPLE:
 """,
 
     "advice": """
+{language_instruction}
+
 INPUT: 
 - Proposed Path: {backbone}
 - Critique Results from Evaluator: {critique}
@@ -199,7 +236,10 @@ ERROR HANDLING:
 
 # --- WF3: TEACHING ---
 
-_TEACH_UNDERSTAND_PROMPT = """You are an intent classifier for a teaching session.
+_TEACH_UNDERSTAND_PROMPT = """
+{language_instruction}
+
+You are an intent classifier for a teaching session.
 
 CHAT HISTORY:
 {history}
@@ -219,7 +259,10 @@ DEFAULT: If ambiguous, choose `continue`.
 
 Output EXACTLY one word: review, continue, or evaluate"""
 
-_TEACH_REVIEW_PROMPT = """STUDENT STATE:
+_TEACH_REVIEW_PROMPT = """
+{language_instruction}
+
+STUDENT STATE:
 - Previous nodes (recently completed): {previous_nodes}
 - Current node: {current_node}
 
@@ -232,15 +275,19 @@ CHAT HISTORY:
 CONTEXT: You may receive prior TA reasoning below. Use it to avoid repeating content.
 
 YOUR TASK:
-1. Review what the student has learned across the previous nodes and current node.
-2. Use the SOURCE MATERIAL above as your primary reference — do NOT fabricate content.
-3. Ask SIMPLE recall questions to test retention — one question per key concept.
-4. Pay close attention to chat history to avoid repeating questions already asked.
-5. Use VN-EN-VN trilingual terminology for technical terms.
+1. If source is a PDF page reference, call `get_pdf_pages` first to read the actual content.
+2. Review what the student has learned across the previous nodes and current node.
+3. Use the SOURCE MATERIAL as your primary reference — do NOT fabricate content.
+4. Ask SIMPLE recall questions to test retention — one question per key concept.
+5. Pay close attention to chat history to avoid repeating questions already asked.
+6. Use VN-EN-VN trilingual terminology for technical terms.
 
 STYLE: Encouraging but rigorous. Prioritize understanding over memorization."""
 
-_TEACH_CONTINUE_PROMPT = """STUDENT STATE:
+_TEACH_CONTINUE_PROMPT = """
+{language_instruction}
+
+STUDENT STATE:
 - Previous nodes: {previous_nodes}
 - Current node: {current_node}
 
@@ -253,23 +300,24 @@ CHAT HISTORY:
 CONTEXT: You may receive prior TA reasoning below. Use it to build on previous lectures.
 
 YOUR TASK:
-1. Teach the CURRENT NODE concept in depth using the SOURCE MATERIAL above.
-2. Break the lecture into sections. After EACH section, pose a challenge question.
-3. Connect to previous nodes when relevant (build on prior knowledge).
-4. Use VN-EN-VN trilingual terminology for all key concepts.
-
-PROCEDURE:
-1. ALWAYS start by calling `get_concept_page` for the current concept.
-2. Read the page text with `get_pdf_pages`.
-3. Formulate your lecture based on the ACTUAL text you read — do NOT fabricate content.
-4. End each section with a Socratic question to test understanding.
+1. ALWAYS read source material first:
+   - If content starts with "Call get_pdf_pages(...)", execute that tool call to get the actual text.
+   - If content starts with "Source content (RAG):", use the provided text directly.
+2. Teach the CURRENT NODE concept in depth using the actual source content you read.
+3. Break the lecture into sections. After EACH section, pose a challenge question.
+4. Connect to previous nodes when relevant (build on prior knowledge).
+5. Use VN-EN-VN trilingual terminology for all key concepts.
+6. If you need additional context from previous steps, call `recall_tool_results`.
 
 STYLE: Clear, structured, pedagogical. Match Bloom's level:
 - Level 1-2: Focus on definitions and recall
 - Level 3-4: Focus on application and analysis
 - Level 5-6: Focus on evaluation and synthesis"""
 
-_TEACH_EVAL_PROMPT_V2 = """CHAT HISTORY (last 6 interactions):
+_TEACH_EVAL_PROMPT_V2 = """
+{language_instruction}
+
+CHAT HISTORY (last 6 interactions):
 {history}
 
 YOUR TASK:
@@ -286,7 +334,10 @@ YOUR TASK:
 Be fair but rigorous. A student who shows genuine understanding of core concepts 
 should pass even if they made minor errors."""
 
-_NEXT_TOPIC_PROMPT = """EVALUATION RESULT:
+_NEXT_TOPIC_PROMPT = """
+{language_instruction}
+
+EVALUATION RESULT:
 - Passed: {passed}
 - Assessment: {user_eval}
 
@@ -305,7 +356,10 @@ YOUR TASK:
 
 Select 1-3 nodes maximum. Prefer quality over quantity."""
 
-_PROPOSAL_PRESENT_PROMPT = """PROPOSAL DATA:
+_PROPOSAL_PRESENT_PROMPT = """
+{language_instruction}
+
+PROPOSAL DATA:
 - Type: {type}
 - Reason: {reason}
 - New starting point: {new_current}
@@ -313,11 +367,82 @@ _PROPOSAL_PRESENT_PROMPT = """PROPOSAL DATA:
 - Source: {source_wf}
 
 FORMAT this as a friendly, clear message for the student:
-1. Explain WHY this change is being proposed
-2. List the proposed learning path
-3. Ask the student to confirm: "Bạn đồng ý không?"
+1. Explain WHY this change is being proposed with pedagogical justification.
+2. List the proposed learning path clearly using bullet points.
+3. Ask the student to confirm: "Bạn đồng ý không?" (or "Do you agree?" in English)
 
-Keep it concise. Use VN-EN-VN for technical terms."""
+RESPONSE GUIDELINES:
+- **Tone & Style**: Warm, encouraging, supportive, and pedagogical.
+- **Trilingual Technical Terms**: Use trilingual Term (English_Term - Term) for all technical concepts in your explanation.
+- **Visual Presentation**: Format with scientific, clean, and highly readable Markdown. Use clear headings and lists.
+
+OUTPUT FORMAT:
+You must output a valid JSON object matching the TAOutput schema.
+EXAMPLE OUTPUT:
+{
+  "summary": "Đề xuất lộ trình học Deep Learning",
+  "message": "Chào bạn, dựa trên yêu cầu, tôi đề xuất lộ trình mới bắt đầu từ Neural Networks...",
+  "ui_action": null
+}
+"""
+
+_TEACH_PRESENT_PROMPT = """
+{language_instruction}
+
+Below is the lecture material generated by the teaching module.
+Present it to the student with a brief heading summary and the lecture content (polished for high readability if needed).
+
+RESPONSE GUIDELINES:
+- **Tone & Style**: Encouraging, professional, interactive, and deeply pedagogical. Keep the student engaged.
+- **Trilingual Technical Terms**: Use trilingual Term (English_Term - Term) for all key technical terms.
+- **Visual Presentation**: Format using gorgeous scientific Markdown, with clear spacings, section dividers, bold concepts, and structured lists.
+
+Lecture Data:
+{teach_res}
+
+OUTPUT FORMAT:
+You must output a valid JSON object matching the TAOutput schema.
+EXAMPLE OUTPUT:
+{
+  "summary": "Bài giảng: Kiến trúc Transformer",
+  "message": "Chúng ta hãy cùng tìm hiểu về kiến trúc Transformer. Đầu tiên...",
+  "ui_action": null
+}
+"""
+
+# --- UNKNOWN FALLBACK ---
+_UNKNOWN_PROMPT = """
+{language_instruction}
+
+STUDENT QUERY: {query}
+STUDENT STATE: {state}
+CHAT HISTORY: {history}
+
+The student's query could not be classified as a learning request. It may be off-topic, ambiguous, or unclear.
+
+YOUR TASK:
+- Do NOT tell the student the system has no data or that information is missing.
+- Do NOT pretend the query was about a specific topic.
+- Politely explain you didn't understand the request.
+- Guide the student on the 3 things you CAN help them with:
+  1. **Tra cứu kiến thức (Knowledge Lookup)**: Ask about concepts, algorithms, definitions, comparisons.
+     e.g., "SVM là gì?", "Các thuật toán phổ biến trong Machine Learning"
+  2. **Lộ trình học tập (Learning Roadmap)**: Plan a study path or ask what to learn next.
+     e.g., "Nên học Deep Learning thế nào?", "Tôi mới bắt đầu, nên học gì?"
+  3. **Bài giảng chi tiết (In-depth Lesson)**: Start or continue an interactive lesson.
+     e.g., "Dạy tôi bài học mới", "Tiếp tục bài học"
+
+RESPONSE GUIDELINES:
+- **Tone & Style**: Warm, friendly, supportive, and pedagogical.
+- **Trilingual Technical Terms**: Use trilingual Term (English_Term - Term) for technical keywords.
+- **Visual Presentation**: Present a clean, well-spaced Markdown output with bullet points for easy reading.
+
+OUTPUT FORMAT:
+You must output a valid JSON object matching the TAOutput schema:
+- "summary": "Yêu cầu làm rõ câu hỏi" (or "Clarification needed" in English).
+- "message": A friendly, brief Markdown response guiding the student.
+- "ui_action": null.
+"""
 
 import os
 import logging

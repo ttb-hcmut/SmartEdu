@@ -3,13 +3,11 @@ import logging
 from langgraph.graph import StateGraph, END
 from core.schema.wf_state import AgentState, ConceptNode
 from TA.edu.workflow.schema import TeachEvalOutput, TeachLectureOutput, NextTopicOutput
-from TA.edu.workflow.prompt import (
-    TEACH_UNDERSTAND_PROMPT,
-    TEACH_REVIEW_PROMPT,
-    TEACH_CONTINUE_PROMPT,
-    TEACH_EVAL_PROMPT_V2,
-    NEXT_TOPIC_PROMPT,
-)
+import TA.edu.workflow.prompt as prompt_lib
+from TA.edu.workflow.few_shot import get_language_instruction
+from TA.edu.utils import safe_parse_structured, extract_llm_raw_text
+import os
+from TA.tracing.tracer import AgentTracer
 
 logger = logging.getLogger(__name__)
 
@@ -87,16 +85,32 @@ async def teach_understand(state: AgentState, ta_agent, config):
     chat_id = config["configurable"].get("chat_id", "")
     history = tracker.get_chat_history(sid)
 
-    prompt = TEACH_UNDERSTAND_PROMPT.format(history=history, query=query)
+    language = state.get("language", "vn")
+    language_instruction = get_language_instruction(language)
+
+    prompt = prompt_lib.TEACH_UNDERSTAND_PROMPT.format(
+        language_instruction=language_instruction,
+        history=history,
+        query=query
+    )
 
     ## -- Simple classification: raw invoke, parse single word
-    res = await ta_agent.raw_model.ainvoke(
+    res = await ta_agent.ainvoke(
         [("user", prompt)], config=config
     )
 
     mode = res.content.strip().lower()
     if mode not in ("review", "continue", "evaluate"):
         mode = "continue"
+
+    log_filename = config.get("configurable", {}).get("log_filename") or os.getenv("TEST_LOG_FILENAME")
+    if log_filename:
+        AgentTracer.logging({
+            "agent_name": ta_agent.name,
+            "node": "Teach_Understand",
+            "prompt": prompt[:300],
+            "output": {"mode": mode}
+        }, type="info", file_name=log_filename)
 
     if tracer and chat_id:
         tracer.log_step(
@@ -130,16 +144,32 @@ async def teach_lookup(state: AgentState, config):
         "_teach_context": {"source": "NO_CONTENT", "content": "", "page": None, "mode": mode}
     }
 
+    def _log_and_return(result):
+        log_filename = config.get("configurable", {}).get("log_filename") or os.getenv("TEST_LOG_FILENAME")
+        if log_filename:
+            ctx = result.get("_teach_context", {})
+            AgentTracer.logging({
+                "agent_name": "Teach_Lookup",
+                "node": "Teach_Lookup",
+                "prompt": f"Lookup concept: {current_node.name if current_node else 'None'}",
+                "output": {
+                    "source": ctx.get("source", "NO_CONTENT"),
+                    "page": ctx.get("page"),
+                    "storage_uri": ctx.get("storage_uri")
+                }
+            }, type="info", file_name=log_filename)
+        return result
+
     if not current_node:
         logger.info("[Teach_Lookup] No current_pos, routing to RAG")
-        return no_content
+        return _log_and_return(no_content)
 
     concept_tool = teach_tools.get("get_concept")
     pages_tool = teach_tools.get("get_pages")
 
     if not concept_tool or not pages_tool:
         logger.warning("[Teach_Lookup] teach_tools not injected, routing to RAG")
-        return no_content
+        return _log_and_return(no_content)
 
     ## -- Step 1: Find pages containing the concept
     try:
@@ -147,19 +177,19 @@ async def teach_lookup(state: AgentState, config):
         parsed = json.loads(concept_result)
     except Exception as e:
         logger.warning(f"[Teach_Lookup] GetConcept failed: {e}")
-        return no_content
+        return _log_and_return(no_content)
 
     if isinstance(parsed, dict) and "error" in parsed:
         logger.info(f"[Teach_Lookup] Concept '{current_node.name}' not in PDF, routing to RAG")
-        return no_content
+        return _log_and_return(no_content)
 
     if not parsed or not isinstance(parsed, list) or len(parsed) == 0:
-        return no_content
+        return _log_and_return(no_content)
 
     ## -- Step 2: Read page content
     hard_ref_str = parsed[0].get("hard_ref")
     if not hard_ref_str:
-        return no_content
+        return _log_and_return(no_content)
 
     try:
         ref_data = json.loads(hard_ref_str)
@@ -168,10 +198,10 @@ async def teach_lookup(state: AgentState, config):
         storage_uri = ref_data.get("id")
     except Exception as e:
         logger.warning(f"[Teach_Lookup] Failed to parse hard_ref: {e}")
-        return no_content
+        return _log_and_return(no_content)
 
     if not storage_uri or not page_num:
-        return no_content
+        return _log_and_return(no_content)
 
     try:
         page_content = pages_tool._run(
@@ -180,11 +210,11 @@ async def teach_lookup(state: AgentState, config):
         )
     except Exception as e:
         logger.warning(f"[Teach_Lookup] GetPages failed: {e}")
-        return no_content
+        return _log_and_return(no_content)
 
     if "error" in page_content.lower() or len(page_content.strip()) < 50:
         logger.info("[Teach_Lookup] PDF content too short, routing to RAG")
-        return no_content
+        return _log_and_return(no_content)
 
     if tracer and chat_id:
         tracer.log_step(
@@ -195,15 +225,16 @@ async def teach_lookup(state: AgentState, config):
             output=f"PDF source: {ref_data.get('name')}, page {page_num}, {len(page_content)} chars",
         )
 
-    return {
+    return _log_and_return({
         "_teach_context": {
             "source": "PDF",
             "content": page_content,
             "page": page_num,
             "storage_uri": storage_uri,
             "mode": mode,
-        }
-    }
+        },
+        "ui_action": {"navigate_page": page_num, "document": storage_uri},
+    })
 
 
 # ─── Node 3: RAG Fallback ──────────────────────────────────────────────────
@@ -231,6 +262,15 @@ async def teach_rag(state: AgentState, rag_agent, config):
     rag_result = await rag_core(temp_state, rag_agent, config)
     rag_content = rag_result.get("worker_results", {}).get("RAG", {}).get("content", "")
 
+    log_filename = config.get("configurable", {}).get("log_filename") or os.getenv("TEST_LOG_FILENAME")
+    if log_filename:
+        AgentTracer.logging({
+            "agent_name": rag_agent.name,
+            "node": "Teach_RAG",
+            "prompt": f"RAG fallback for: {concept_name}",
+            "output": {"content_len": len(rag_content)}
+        }, type="info", file_name=log_filename)
+
     if tracer and chat_id:
         tracer.log_step(
             chat_id=chat_id,
@@ -254,7 +294,12 @@ async def teach_rag(state: AgentState, rag_agent, config):
 # ─── Node 4: LLM Lecture Generation ────────────────────────────────────────
 
 async def teach_lecture(state: AgentState, ta_agent, config):
-    """ No-tool node: raw_model with TeachLectureOutput schema, TA history injected"""
+    """
+    TA agent (tool-calling) reads PDF content then generates lecture.
+    - If Teach_Lookup found a PDF page: inject page ref into prompt, TA calls get_pdf_pages itself
+    - If RAG fallback: content already in _teach_context
+    TA must read the source material via tool before generating lecture.
+    """
     sid = config["configurable"]["session_id"]
     tracker = config["configurable"]["student_tracker"]
     tracer = config["configurable"].get("tracer")
@@ -264,7 +309,6 @@ async def teach_lecture(state: AgentState, ta_agent, config):
     history = tracker.get_chat_history(sid)
 
     ctx = state.get("_teach_context", {})
-    content = ctx.get("content", "")
     source = ctx.get("source", "unknown")
     mode = ctx.get("mode", "continue")
 
@@ -272,45 +316,76 @@ async def teach_lecture(state: AgentState, ta_agent, config):
     previous_nodes = student_state.get("previous_nodes", [])
     current_str = current_node.name if current_node else "None"
 
+    language = state.get("language", "vn")
+    language_instruction = get_language_instruction(language)
+
+    prev_str = "\n".join(
+        f"  {i+1}. {n.name} ({n.type})" for i, n in enumerate(previous_nodes[:3])
+    ) or "  (no previous nodes)"
+
+    if source == "PDF":
+        page_num = ctx.get("page")
+        storage_uri = ctx.get("storage_uri", "")
+        # TA receives page ref and must call get_pdf_pages to read before lecturing
+        source_ref = f"PDF page {page_num} at '{storage_uri}'" if page_num else "the PDF document"
+        content_hint = f"Call get_pdf_pages(pages=[{page_num}, {page_num + 1 if page_num else ''}], destination='{storage_uri}') to read the content first."
+    else:
+        # RAG fallback: content already provided
+        rag_content = ctx.get("content", "")
+        source_ref = "RAG knowledge base"
+        content_hint = f"Source content (RAG):\n{rag_content[:2500]}"
+
     if mode == "review":
-        prev_str = "\n".join(
+        prev_str_long = "\n".join(
             f"  {i+1}. {n.name} ({n.type})" for i, n in enumerate(previous_nodes[:6])
         ) or "  (no previous nodes)"
-
-        prompt = TEACH_REVIEW_PROMPT.format(
-            previous_nodes=prev_str,
+        prompt = prompt_lib.TEACH_REVIEW_PROMPT.format(
+            language_instruction=language_instruction,
+            previous_nodes=prev_str_long,
             current_node=current_str,
-            source=source,
-            content=content[:3000],
+            source=source_ref,
+            content=content_hint,
             history=history,
         )
     else:
-        prev_str = "\n".join(
-            f"  {i+1}. {n.name} ({n.type})" for i, n in enumerate(previous_nodes[:3])
-        ) or "  (no previous nodes)"
-
-        prompt = TEACH_CONTINUE_PROMPT.format(
+        prompt = prompt_lib.TEACH_CONTINUE_PROMPT.format(
+            language_instruction=language_instruction,
             previous_nodes=prev_str,
             current_node=current_str,
-            source=source,
-            content=content[:3000],
+            source=source_ref,
+            content=content_hint,
             history=history,
         )
 
-    ## -- Inject prior TA messages for coherence (TA model only)
+    ## -- Inject prior TA messages for coherence
     ta_context = _extract_ta_context(state)
     if ta_context:
         prompt = f"[Prior TA reasoning]:\n{ta_context}\n\n{prompt}"
 
-    ## -- Direct structured output, no tool loop
-    structured_llm = ta_agent.raw_model.with_structured_output(TeachLectureOutput)
-    res: TeachLectureOutput = await structured_llm.ainvoke(
-        [("user", prompt)], config=config
-    )
+    ## -- TA agent invokes as tool-calling agent, reads PDF via get_pdf_pages then lectures
+    try:
+        result = await ta_agent.ainvoke(
+            {"messages": [("user", prompt)], "current_node": "Teach_Lecture"},
+            config=config,
+        )
+        res: TeachLectureOutput = result["structured_response"]
+    except Exception as e:
+        logger.warning(f"[teach_lecture] Agent invoke failed: {e}. Attempting json_repair.")
+        res = safe_parse_structured(extract_llm_raw_text(e), TeachLectureOutput)
 
     lecture_text = res.lecture
     if res.challenge_question:
-        lecture_text += f"\n\n**Câu hỏi kiểm tra:** {res.challenge_question}"
+        lecture_text += f"\n\n**C\u00e2u h\u1ecfi ki\u1ec3m tra:** {res.challenge_question}"
+
+    log_filename = config.get("configurable", {}).get("log_filename") or os.getenv("TEST_LOG_FILENAME")
+    if log_filename:
+        AgentTracer.logging({
+            "agent_name": ta_agent.name,
+            "node": "Teach_Lecture",
+            "thought": res.thought if hasattr(res, "thought") else "",
+            "prompt": prompt[:300],
+            "output": res.model_dump() if hasattr(res, "model_dump") else res
+        }, type="info", file_name=log_filename)
 
     if tracer and chat_id:
         tracer.log_step(
@@ -339,13 +414,34 @@ async def teach_evaluate(state: AgentState, ta_agent, config):
     tracker = config["configurable"]["student_tracker"]
     history = tracker.get_chat_history(sid)
 
-    prompt = TEACH_EVAL_PROMPT_V2.format(history=history)
+    language = state.get("language", "vn")
+    language_instruction = get_language_instruction(language)
+
+    prompt = prompt_lib.TEACH_EVAL_PROMPT_V2.format(
+        language_instruction=language_instruction,
+        history=history
+    )
 
     ## -- Direct structured output
-    structured_llm = ta_agent.raw_model.with_structured_output(TeachEvalOutput)
-    eval_res: TeachEvalOutput = await structured_llm.ainvoke(
-        [("user", prompt)], config=config
-    )
+    structured_llm = ta_agent.model.with_structured_output(TeachEvalOutput)
+    try:
+        eval_res: TeachEvalOutput = await structured_llm.ainvoke(
+            [("user", prompt)], config=config
+        )
+    except Exception as e:
+        logger.warning(f"[teach_evaluate] Structured output failed: {e}. Attempting json_repair.")
+        eval_res = safe_parse_structured(extract_llm_raw_text(e), TeachEvalOutput)
+
+
+    log_filename = config.get("configurable", {}).get("log_filename") or os.getenv("TEST_LOG_FILENAME")
+    if log_filename:
+        AgentTracer.logging({
+            "agent_name": ta_agent.name,
+            "node": "Teach_Evaluate",
+            "thought": eval_res.thought if hasattr(eval_res, "thought") else "",
+            "prompt": prompt[:300],
+            "output": eval_res.model_dump() if hasattr(eval_res, "model_dump") else eval_res
+        }, type="info", file_name=log_filename)
 
     current_results = state.get("worker_results", {})
     return {
@@ -368,6 +464,14 @@ async def next_topic(state: AgentState, ta_agent, config):
     current_str = current_node.name if current_node else "None"
 
     if not eval_data.get("passed", False):
+        log_filename = config.get("configurable", {}).get("log_filename") or os.getenv("TEST_LOG_FILENAME")
+        if log_filename:
+            AgentTracer.logging({
+                "agent_name": "Next_Topic",
+                "node": "Next_Topic",
+                "prompt": "Evaluation stay check",
+                "output": {"action": "STAY", "reason": "Evaluation not passed"}
+            }, type="info", file_name=log_filename)
         return {
             "worker_results": {
                 **state.get("worker_results", {}),
@@ -377,7 +481,11 @@ async def next_topic(state: AgentState, ta_agent, config):
 
     recommend_result = _get_recommendations(tracker.graphdb, current_node)
 
-    prompt = NEXT_TOPIC_PROMPT.format(
+    language = state.get("language", "vn")
+    language_instruction = get_language_instruction(language)
+
+    prompt = prompt_lib.NEXT_TOPIC_PROMPT.format(
+        language_instruction=language_instruction,
         passed=eval_data.get("passed"),
         user_eval=eval_data.get("user_eval", ""),
         current_node=current_str,
@@ -385,10 +493,15 @@ async def next_topic(state: AgentState, ta_agent, config):
     )
 
     ## -- Direct structured output
-    structured_llm = ta_agent.raw_model.with_structured_output(NextTopicOutput)
-    topic_res: NextTopicOutput = await structured_llm.ainvoke(
-        [("user", prompt)], config=config
-    )
+    structured_llm = ta_agent.model.with_structured_output(NextTopicOutput)
+    try:
+        topic_res: NextTopicOutput = await structured_llm.ainvoke(
+            [("user", prompt)], config=config
+        )
+    except Exception as e:
+        logger.warning(f"[next_topic] Structured output failed: {e}. Attempting json_repair.")
+        topic_res = safe_parse_structured(extract_llm_raw_text(e), NextTopicOutput)
+
 
     selected_names = topic_res.selected_nodes
     next_nodes = [ConceptNode(name=name) for name in selected_names if isinstance(name, str)]
@@ -406,6 +519,16 @@ async def next_topic(state: AgentState, ta_agent, config):
             "source_wf": "Teach",
             "auto_apply": True,
         }
+
+    log_filename = config.get("configurable", {}).get("log_filename") or os.getenv("TEST_LOG_FILENAME")
+    if log_filename:
+        AgentTracer.logging({
+            "agent_name": ta_agent.name,
+            "node": "Next_Topic",
+            "thought": topic_res.thought if 'topic_res' in locals() and hasattr(topic_res, "thought") else "",
+            "prompt": prompt[:300],
+            "output": topic_res.model_dump() if 'topic_res' in locals() and hasattr(topic_res, "model_dump") else {}
+        }, type="info", file_name=log_filename)
 
     result = {
         "worker_results": {

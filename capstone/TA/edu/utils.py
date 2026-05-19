@@ -1,9 +1,140 @@
 
-import json
 import logging
-from typing import Dict, Any
+import typing
+import types as _builtin_types
+from typing import Dict, Any, Type
+
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
+
+
+# ── JSON Repair utilities ────────────────────────────────────────────────────
+
+# Required str fields whose value should be filled with the raw LLM text on fallback
+_CONTENT_FIELD_NAMES = {"message", "content", "lecture", "ai_message", "answer", "response", "text"}
+
+
+def extract_llm_raw_text(exc: Exception) -> str:
+    """Standardize raw LLM text extraction from various LangChain exception formats."""
+    if hasattr(exc, "ai_message") and exc.ai_message:
+        return exc.ai_message.content
+    if hasattr(exc, "llm_output") and exc.llm_output:
+        return str(exc.llm_output)
+    if "Invalid json output:" in str(exc):
+        return str(exc).split("Invalid json output:")[-1].strip()
+    return ""
+
+
+def _strip_markdown_block(text: str) -> str:
+    """Remove ```json ... ``` wrapper if present."""
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        return "\n".join(lines).strip()
+    return text
+
+
+def safe_parse_structured(raw_text: str, schema_class: Type[BaseModel]) -> BaseModel:
+    """
+    Robustly parse raw LLM text into a Pydantic schema.
+
+    Steps:
+      1. Strip markdown code block (``` ... ```)
+      2. Use json_repair to fix any malformed JSON (unterminated strings, trailing
+         commas, unescaped newlines, single quotes, truncation, etc.)
+      3. model_validate() into schema_class
+      4. If all above fails → auto_default_schema() based on field name + type
+    """
+    from json_repair import repair_json
+
+    cleaned = _strip_markdown_block(raw_text.strip()) if raw_text else ""
+
+    if cleaned:
+        try:
+            repaired = repair_json(cleaned, return_objects=True)
+            if isinstance(repaired, dict):
+                return schema_class.model_validate(repaired)
+        except Exception as e:
+            logger.debug(
+                f"[safe_parse_structured] json_repair+validate failed for "
+                f"{schema_class.__name__}: {e}"
+            )
+
+    logger.warning(
+        f"[safe_parse_structured] All parse attempts failed for "
+        f"{schema_class.__name__}. Using auto_default."
+    )
+    return auto_default_schema(raw_text or "", schema_class)
+
+
+def auto_default_schema(raw_text: str, schema_class: Type[BaseModel]) -> BaseModel:
+    """
+    Auto-construct a safe default Pydantic instance using field name + type heuristics.
+
+    Rules (applied only to required fields without defaults):
+      - str with content-like name (message, lecture, ai_message, ...): raw_text
+      - str other names (thought, criteria, ...): ""
+      - bool: False
+      - float: 0.0
+      - int: 0
+      - List / list: []
+      - Dict / dict: {}
+      - Literal[...]: first literal value
+      - Optional[X] / Union[X, None] / X | None: None
+    """
+    from pydantic.fields import PydanticUndefined
+
+    kwargs = {}
+    for name, field_info in schema_class.model_fields.items():
+        has_default = (
+            field_info.default is not PydanticUndefined
+            or field_info.default_factory is not None
+        )
+        if has_default:
+            continue
+        kwargs[name] = _resolve_field_default(name, field_info.annotation, raw_text)
+
+    return schema_class(**kwargs)
+
+
+def _resolve_field_default(name: str, annotation, raw_text: str):
+    """Return a type-safe default value for a required Pydantic field."""
+    origin = typing.get_origin(annotation)
+    args = typing.get_args(annotation)
+
+    # Optional[X] / Union[X, None] (typing) or X | None (Python 3.10+)
+    is_union = origin is typing.Union
+    if not is_union and hasattr(_builtin_types, "UnionType"):
+        is_union = isinstance(annotation, _builtin_types.UnionType)
+    if is_union and type(None) in args:
+        return None
+
+    # Literal["A", "B", ...] → first value
+    if origin is typing.Literal:
+        return args[0]
+
+    # Generic containers
+    if origin is list:
+        return []
+    if origin is dict:
+        return {}
+
+    # Primitive scalars
+    if annotation is str:
+        return raw_text if name in _CONTENT_FIELD_NAMES else ""
+    if annotation is bool:
+        return False
+    if annotation is float:
+        return 0.0
+    if annotation is int:
+        return 0
+
+    return None
+
 
 
 
