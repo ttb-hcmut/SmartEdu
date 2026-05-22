@@ -6,7 +6,7 @@ The proposed paradigm can be constrcuted and visualized as the below pipeline
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{Images/method/pipeline.png}
-    \vspace{8pt}\caption{Macro workflow of the SmartEdu system, illustrating the Knowledge Modelling, Middleware, and Agentic Workflow orchestration.}
+    \vspace{10pt}\caption{Macro workflow of the SmartEdu system, illustrating the Knowledge Modelling, Middleware, and Agentic Workflow orchestration.}
     \label{fig:macro_workflow}
 \end{figure}
 \\\\
@@ -90,7 +90,7 @@ where $E_{\text{tree}} \subset V_{\text{tree}} \times V_{\text{tree}}$ contains 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.3\textwidth]{Images/method/g_extract.png}
-    \vspace{8pt}\caption{Dual Phase Extraction}\label{fig:g_ex}
+    \vspace{10pt}\caption{Dual Phase Extraction}\label{fig:g_ex}
 \end{figure}
 To eliminate ontological drift, the LLM is forced to output data conforming to a rigid, predefined syntactic schema (e.g., strict JSON schema validation). The system parses this structural output to instantiate \texttt{CommunityNode} and \texttt{TopicNode} entities, ensuring that every atomic concept is firmly anchored to a macroscopic curriculum node. 
 \\\\
@@ -121,7 +121,11 @@ output, but what if Phase 1 itself is not a good frame skeleton? To better recon
 
 \subsubsection{NLP-Based Concept Filtering and Verification}
 
-Although the Dual-Phase LLM Extraction (Section~\ref{subsub:dual}) significantly reduces hallucination by constraining the model's action space, the raw output of Phase~1 remains susceptible to surface-level inconsistencies: semantically equivalent concepts may appear under distinct lexical forms, and spurious or overly granular entities may be introduced without grounding in established knowledge. To address these issues, a deterministic NLP pipeline is interposed between Phase~1 and Phase~2. This pipeline operates exclusively on the candidate node set $V_{\text{tree}}$ and produces a refined, verified set $V^{*} \subseteq V_{\text{tree}}$ that is subsequently passed to the Relation Phase.
+Although the Dual-Phase LLM Extraction (Section~\ref{subsub:dual}) significantly reduces hallucination by constraining the model's action space, the raw output 
+of Phase~1 remains susceptible to surface-level inconsistencies: semantically equivalent concepts may appear under distinct lexical forms, and spurious or overly 
+granular entities may be introduced without grounding in established knowledge. To address these issues, a deterministic NLP pipeline is interposed between Phase~1 
+and Phase~2. This pipeline operates exclusively on the candidate node set $V_{\text{tree}}$ and produces a refined, verified set $V^{*} \subseteq V_{\text{tree}}$ 
+that is subsequently passed to the Relation Phase.
 
 The pipeline proceeds through four sequential steps.
 
@@ -152,56 +156,234 @@ This measurement serves two complementary functions. First, concept pairs satisf
 
 \paragraph*{Step 4 — Verified Node Caching.}
 
-Once a concept node has successfully traversed Steps~1 through~3 — normalized, externally validated, and cluster-assigned — its canonical representation is persisted in a key-value cache, indexed by its normalized token set $\mathcal{N}(v_i)$. This cache serves three purposes. First, it ensures \textit{idempotency}: if the same concept surface form is encountered across multiple ingested documents, it resolves deterministically to the same canonical node without re-executing the NLP pipeline. Second, it supports \textit{incremental graph construction}: as new educational materials are added to the corpus over time, only genuinely novel concepts need to traverse the full verification pipeline, while previously verified nodes are retrieved directly from cache. Third, it provides the Relation Phase (Phase~2) with a stable, pre-validated entity vocabulary, eliminating the need for redundant lookups during edge generation. The final verified and deduplicated set $V^{*}$ is then passed forward as the immutable input to $\Phi_{\text{relation}}$.
+Once a concept node has successfully traversed Steps~1 through~3 — normalized, externally validated, and cluster-assigned — its canonical representation is persisted 
+in a key-value cache, indexed by its normalized token set $\mathcal{N}(v_i)$. This cache serves three purposes. First, it ensures \textit{idempotency}: if the same concept surface form is encountered across multiple ingested documents, it resolves deterministically to the same canonical node without re-executing the NLP pipeline. Second, it supports \textit{incremental graph construction}: as new educational materials are added to the corpus over time, only genuinely novel concepts need to traverse the full verification pipeline, while previously verified nodes are retrieved directly from cache. Third, it provides the Relation Phase (Phase~2) with a stable, pre-validated entity vocabulary, eliminating the need for redundant lookups during edge generation. The final verified and deduplicated set $V^{*}$ is then passed forward as the immutable input to $\Phi_{\text{relation}}$.
 \section{Teaching Assistance}
-The knowledge graph $G$ serves as the static, structural foundation of the system. However, the real-time interaction with a human learner requires a dynamic, 
-adaptive reasoning engine that can navigate $G$ to generate personalized educational responses. This section uncover the algorithm to
+The knowledge graph $G$ serves as the static, structural foundation of the system. However, real-time interaction with a human 
+learner demands a dynamic, adaptive reasoning engine capable of navigating $G$ to produce personalized educational responses. 
+A single monolithic language model, no matter how capable, cannot reliably handle the diverse reasoning tasks involved in 
+tutoring---from classifying student intent, to retrieving factual content with minimal cost and latency, to generating structured 
+lectures, to evaluating learning outcomes. Each of these tasks requires a different workflow design.
+\\\\
+To address this challenge, the proposed system decomposes the tutoring process into a multi-agent workflow, where each reasoning 
+step is handled by a dedicated agent node with its own tailored prompt, tools, and output schema. The following subsections 
+describe the core architectural decisions that make this decomposition both practical and effective: its applied harnessing 
+as well as workflow design.
 
 \subsection{Agent Harnessing}
 
+Rather than relying on a single, prompt-heavy LLM to manage all tutoring logic, the Teaching Assistant is structured as a collection of specialized agent nodes 
+coordinated through what we term an \textit{Agent Harness}. This harness governs how each node receives its instructions, what context it can access, 
+and what format its output must follow. The design philosophy, called by myself the \texttt{''Single Paradigm''}, is straightforward --- each agent node should have exactly one 
+responsibility, 
+exactly one instruction set with one consistent context, and exactly one input/output structure/schema definition. 
+
+
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{Images/method/agent_design.png}
-    \vspace{8pt}\caption{Agent Harness architecture demonstrating the localization of text, dynamic schema injection, and Adaptive Middleware orchestration.}
+    \includegraphics[width=1.0\textwidth]{Images/method/agent_design.png}
+    \vspace{10pt}\caption{Agent Harness architecture demonstrating the Adaptive Harnessing based on Middleware.}
     \label{fig:agent_harness}
 \end{figure}
+\\\\The following paragraphs detail the key 
+techniques that enable this architecture, as visuallized fully in Figure~\ref{fig:agent_harness}
+\subsubsection*{Chat Summarization and Memory Management}
 
-Instead of using a single, prompt-heavy LLM, we design the Teaching Assistant logic using an \textit{Agent Harness}. This architecture relies on an \textit{Adaptive Middleware} layer (a feature introduced to frameworks like LangChain in late 2025). This middleware allows for dynamic and adaptive changes that are not possible in standard, static state-graph architectures. This approach offers three main advantages over pre-implemented agents:
+A persistent challenge in multi-turn conversational AI is the accumulation of context. As a tutoring session progresses, the raw chat history grows rapidly, filled with verbose tool outputs, intermediate reasoning traces, and previous lecture content. Feeding this entire history into every agent call would quickly exhaust the model's context window and introduce significant noise that degrades reasoning quality.
+\\\\
+To mitigate this problem, the system employs a sliding-window memorization mechanism. Instead of preserving the complete raw transcript, each conversational turn is condensed into a structured triplet of the form: \textit{query} $\rightarrow$ \textit{thought} $\rightarrow$ \textit{answer summary}. Only a fixed number of these summarized entries (default at 8) are retained in the active session memory at any given time. Older entries are dropped from the window as new ones arrive, ensuring that the memory footprint remains bounded regardless of session length.
+\\\\
+This summarized history is then presented to different agents in different formats depending on their needs. Lightweight classification nodes---such as the intent router---receive only the heading summaries of previous interactions (a mode referred to as \textit{skim}). In contrast, nodes that require deeper contextual awareness---such as lecture generation or evaluation---receive the full summarized messages. This selective exposure ensures that each agent receives precisely the amount of historical context it needs: enough to maintain conversational coherence, but not so much that it overwhelms the model's reasoning capacity.
 
-\begin{itemize}
-    \item \textbf{Localization of Text (One-to-One Node-Agent Responsibility):} By assigning specific agents to individual workflow nodes, the action space is limited. This prevents the confusion and incorrect tool calls that often happen when a single model tries to handle multiple tasks at once.
-    \item \textbf{Dynamic Memory Injection:} The agent does not have to read long, noisy chat histories filled with raw tool results. Instead, the middleware filters the context and only provides the specific memory and state information needed for the current decision.
-    \item \textbf{Dynamic Schema Definition:} The middleware dynamically injects validation schemas (using Pydantic) based on the active node's function. This ensures that the model's output strictly follows the required format before moving to the next step.
-\end{itemize}
+\subsubsection{Tool Abstraction Design}
+
+The SmartEdu system operates on top of a complex data infrastructure comprising a graph database (Neo4j), a vector store (Milvus), a document store (MongoDB), and an 
+object storage service (MinIO). Allowing an LLM agent to interact directly with these systems would introduce severe risks: the model could construct malformed queries, 
+access unauthorized data, or perform destructive write operations.
+\\\\
+To prevent these issues, the system introduces a tool abstraction layer that sits between the agents and the underlying databases. Each tool exposes a single, well-defined 
+function---for example, resolving a concept name to its graph identifier, retrieving all rhetorical content associated with a node, or extracting a specific page 
+from a stored PDF document. The agent interacts exclusively with these high-level tool interfaces and has no direct access to raw database connections or query 
+languages.
+\\\\
+Critically, these tools are pre-configured with the active student's session context at the beginning of each request. The student's identity, learning history, 
+and session scope are injected into the tools before the agent ever sees them. From the agent's perspective, calling a tool named \texttt{entity\_finder} with a 
+concept name is a simple, self-contained operation. The agent does not need to know which database engine is being queried, how the algorithm works, 
+or how the results are filtered by student scope. This separation achieves two goals simultaneously: it simplifies the agent's decision space (reducing the probability 
+of incorrect tool calls), and it enforces strict data isolation (preventing cross-session leakage or unauthorized mutations).
+
+\subsubsection{State---based Harnessing}
+
+In a conventional single-agent architecture, the entire system prompt, all available context and tools are ninded once at the beginning of the conversation and 
+remain static throughout.This approach is quite common due to simplicity and the popularity of Large language Model with huge context, but becomes increasingly 
+problematic as the complexity of the task exceed the context window, because the model must simultaneously bind and remember instructions 
+for routing, retrieval, evaluation, and response generation.
+\\\\
+The Dynamic Harness addresses this limitation through state-dependent context injection. Each node in the workflow graph is associated with its own prompt template, 
+and these templates are populated dynamically at runtime based on the current workflow state. When the system reaches a retrieval node, the agent receives only retrieval-specific instructions along with the relevant query and entity data. When it reaches an evaluation node, the agent receives evaluation criteria and the recent interaction history. The student's current learning position, mastery profile, and active resource are injected only into nodes where they are pedagogically relevant.
+\\\\
+Furthermore, synthesis nodes---those responsible for producing the final student-facing response---receive an additional injection of prior reasoning from upstream nodes. For instance, the final advisory node in the Roadmap workflow receives not only the proposed learning path but also the critique generated by the evaluator node that preceded it. This chained injection ensures that the final output reflects the accumulated reasoning of the entire pipeline, rather than being generated in isolation. The result is a system where each agent operates with a minimal, purpose-built context window, yet the overall pipeline produces coherent, multi-step reasoning.
+
+\subsubsection{LangChain Middleware Architecture}
+
+The dynamic per-node behavior described above requires a mechanism that can intercept and modify agent execution at each step of the workflow. Standard agent frameworks---including earlier versions of LangChain, as well as alternatives such as CrewAI and AutoGen---typically operate with a fixed configuration: the agent's tools, system prompt, and output format are defined once at initialization and remain constant throughout execution. This rigidity makes it difficult to change the agent's behavior dynamically based on which node is currently active.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\textwidth]{Images/method/lang_mid.png}
+    \vspace{15pt}\caption{Langchain Middleware. Referenced from \href{https://www.langchain.com/blog/agent-middleware}{Langchain Documents}}
+    \label{fig:lang_mid}
+\end{figure}
+The Middleware abstraction, introduced to LangChain in later middle of 2025, provides a solution to this problem. A middleware component is a composable interceptor that hooks into the agent's execution loop at the model-call level. Specifically, it exposes an asynchronous method (\texttt{awrap\_model\_call}) that receives the model request before it is sent to the LLM and can modify, augment, or redirect that request before passing it to the actual handler. This design pattern is analogous to middleware in web server frameworks, where request-processing logic is composed as a chain of interceptors rather than a monolithic handler.
+\\\\
+The key advantage of this architecture over role-based multi-agent frameworks (such as CrewAI's crew-of-agents or AutoGen's conversable agents) is granularity. In role-based systems, each agent is a fully independent entity with its own model instance, prompt, and tool set. Changing the agent's behavior requires spawning an entirely new agent. With middleware, a single underlying agent instance can exhibit different behaviors at different workflow nodes, because the middleware dynamically modifies its configuration on each invocation. This eliminates the overhead of maintaining multiple redundant model connections while preserving the flexibility of per-node specialization.
+
+\subsubsection{Agentic Coopperation into Workflow}
+Building on the LangChain middleware foundation, the proposed system introduces a custom middleware component termed the \textit{Adaptive Middleware}. 
+This middleware maintains an internal registry that store all of workflow node names. When the agent is invoked at a particular node, the middleware inspects the 
+current node identifier in the workflow state, finding its registered harnessing protocol of the node, to reconstruct the agent before truly invoke the agent for the 
+specific tasks 
+that node.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{Images/method/adaptive_middleware.png}
+    \vspace{15pt}\caption{How agents are cooperate into each node of the workflow}
+    \label{fig:agent2wf}
+\end{figure}
+
+\\\\
+This design offer 4 novel benefits:
+\begin{enumerate}
+ \item \texttt{Single Paradigm} is applied when workflow node is registered with its own harnessing protocol, preventing the 
+confusion that arises when a model must choose among multiple possible reasoning, requirements and methods.
+\item Because the middleware handles schema routing automatically, the prompt templates for each node can focus exclusively on the reasoning task at hand, 
+without needing to include format-selection instructions. 
+\item By constraining the output space to a predefined set, the system significantly reduces the probability of the model generating structurally 
+invalid or semantically drifted responses. Each agent node operates within a tightly bounded action space---one task, one context, one schema---which 
+collectively yields a more reliable and debuggable multi-step reasoning pipeline.
+\item With the registry techniques, agents are not hardcoded in nodes during initial. This allow easy behaviour debug from the central registry, making 
+agentic design more flexible and scalable.
+
+\end{enumerate} 
 \subsection{Agentic Workflow}
 
+The Teaching Assistant's reasoning process is organized as a hierarchical state machine. At the top level, a router node classifies each incoming student query into
+one of five intent categories and dispatches it to the corresponding sub-workflow. Each sub-workflow is itself a directed graph of specialized nodes, where each node
+performs a single reasoning or data-retrieval step. Upon completion, every sub-workflow passes its results to a synthesis node that formats the final student-facing
+response and persists the session state. Figure~\ref{fig:smartedu} illustrates this top-level architecture.
+
 \input{table/chap4/wf.tex}
-\subsubsection{Workflow: Retrieve}
 
-The Retrieve workflow focuses on answering factual questions by searching the knowledge base.
+\subsubsection*{Intent Router}
 
-\input{table/chap4/wf_1.tex}
+The entry point of every student interaction is the Intent Router. This node receives three inputs: (1) the student's current learning state (active position, pending proposals), (2) a summarized view of recent chat history (\textit{skim} mode), and (3) the raw query. It classifies the query into exactly one of five intents: \textit{retrieve}, \textit{roadmap}, \textit{teaching}, \textit{confirm}, or \textit{unknown}. The classification uses constrained generation (temperature zero, bounded output length) to produce a single word, without any tool invocation. This ensures minimal latency at the routing step.
 
-\paragraph*{\textbf{Reasoning CoT Loop:}} The retrieval agent uses a Chain-of-Thought (CoT) sequence that separates edges from concepts. It first analyzes the graph's structure to understand the context of the user's query. Then, it calls the necessary tools to fetch related sub-graphs and summarizes the final answer.
+\subsubsection{Workflow: Roadmap}\label{subsub:wf_roadmap}
 
-\paragraph*{\textbf{Tools:}} This workflow uses topology instruction tools. These allow the agent to explore relationships and perform semantic searches without needing to read raw, unstructured data from the database.
-
-\subsubsection{Workflow: Roadmap}
-
-The Roadmap workflow acts as the learning planner.
+The Roadmap workflow addresses the question: \textit{what should the student learn next, and in what order?} Unlike factual retrieval, this requires pedagogical reasoning---comparing the student's current mastery against the structural dependencies in the knowledge graph to produce a feasible study plan.
 
 \input{table/chap4/wf_2.tex}
 
-\paragraph*{\textbf{Reasoning CoT Loop:}} The planner starts by identifying the target course. It follows a sequence: \textit{get\_backbone} $\rightarrow$ \textit{evaluate state} (which checks for knowledge gaps by comparing the course with the student's current mastery) $\rightarrow$ \textit{advise}. To make sure the learning path is logical and sequential, the algorithm uses a technique called "window max sampling" for backbone node discovery. This prevents the learning path from jumping randomly between topics.
+\paragraph*{Node: Roadmap\_Explore.}
+A well-constructed knowledge graph is inherently dense and interconnected: a single course may contain hundreds of concept nodes linked by prerequisite, hierarchical, and associative edges. This density, while beneficial for semantic coverage, presents a navigation problem. Without a method to distinguish foundational concepts from peripheral ones, any attempt to generate a learning path would either overwhelm the student with every available node or arbitrarily select concepts without structural justification.
+\\\\
+To address this, the exploration node applies \textit{Out-Degree Centrality} as a structural heuristic to locate \textit{backbone nodes}---the most foundationally connected concepts in a course. For a given node $v \in V$, the semantic out-degree $C_{deg}(v)$ is defined as:
+\begin{equation}
+    C_{deg}(v) = \sum_{\substack{w \in V \\ (v,w) \in E_{\text{sem}}}} 1
+\end{equation}
+where $E_{\text{sem}} = \{ e \in E \mid \lambda_e \neq \textit{CONTENT} \}$ excludes purely content-bearing edges. Nodes satisfying $C_{deg}(v) \geq k_{\min}$ are classified as \textit{hub nodes}---concepts that serve as prerequisite or structural anchors for many downstream topics. These hub nodes collectively form the course backbone $\mathcal{B} = \{v \in V \mid C_{deg}(v) \geq k_{\min}\}$.
+\\\\
+However, simply ranking all hub nodes by centrality and presenting them as a flat list would discard the sequential ordering that makes a learning path pedagogically valid. A student must encounter foundational hubs before advanced ones, and the path must not skip over intermediate dependencies. To preserve this order while still selecting only the most important nodes, the system applies a \textit{sliding window sampling} strategy over the topologically sorted backbone.
+\\\\
+Let $\mathcal{B}^{*} = (b_1, b_2, \ldots, b_n)$ be the ordered sequence of backbone nodes, sorted by their topological position in the prerequisite sub-graph $G_{prereq}$. A sliding window of fixed size $w$ advances over $\mathcal{B}^{*}$ with step size $s$. Within each window $W_i = (b_{j}, b_{j+1}, \ldots, b_{j+w-1})$, the system selects the top-$k$ nodes ranked by $C_{deg}$:
+\begin{equation}
+    \text{Selected}(W_i) = \operatorname{top\text{-}k}\bigl(\{b \in W_i\},\; C_{deg}\bigr), \quad \text{with (by default)} k = 2
+\end{equation}
+The final summarized path is the ordered concatenation of selected nodes across all windows:
+\begin{equation}
+    P_{\text{roadmap}} = \text{Selected}(W_1) \oplus \text{Selected}(W_2) \oplus \cdots \oplus \text{Selected}(W_m)
+\end{equation}
+This mechanism offers two key guarantees. First, the topological sort on $G_{prereq}$ ensures that prerequisite concepts always appear before dependent ones, preserving the logical learning order. Second, the windowed selection prevents the path from clustering around a single dense region of the graph or jumping erratically between distant topics---each window captures the locally most important concepts within its segment of the curriculum, producing a path that is both comprehensive and sequential.
+\\\\
+The node is equipped with three graph exploration tools: \texttt{recommend\_new} (ranking nodes by semantic out-degree), \texttt{course\_backbone} (extracting hub nodes and inter-hub relationships within a course), and \texttt{course\_relevance} (detecting cross-course prerequisite dependencies). The output is a structured object containing the recommended starting node, the learning goal, and the ordered list of hub nodes forming the proposed path.
 
-\paragraph*{\textbf{Tools:}} It uses graph exploration tools to retrieve the course backbone. It also uses mastery-filtering tools to compare the required learning path with the student's current progress.
+\paragraph*{Node: Roadmap\_Evaluator.}
+The proposed path from the exploration node is not presented directly to the student. Instead, it passes through an evaluation step that examines feasibility against the student's current mastery profile. The evaluator performs three checks: a \textit{necessity audit} (is each hub node truly essential?), a \textit{prerequisite check} (does the student have recorded mastery for all required foundations?), and a \textit{cognitive load assessment} (does the sequence avoid placing too many difficult concepts in immediate succession?). This node operates without tools---it is a pure reasoning step that produces a feasibility judgment and a critique narrative.
 
-\subsubsection{Workflow: Teach}
+\paragraph*{Node: TA\_Advice.}
+The advisory node reconciles the proposed path with the evaluator's critique. If prerequisite gaps were found, it recommends addressing those foundations first. If the path is feasible, it specifies the exact starting concept and provides concrete guidance. The output contains the finalized learning steps and pedagogical advice. This three-stage pipeline---explore, evaluate, advise---mirrors how a human tutor would plan: survey the landscape, assess readiness, then recommend.
 
-The Teach workflow manages the active teaching process.
+\paragraph*{Synthesis: TA\_Roadmap\_Finish.}
+The synthesis node packages the advisory output into a formal \textit{Learning Proposal}. Unlike Retrieve proposals (which are applied automatically), Roadmap proposals require explicit student confirmation before updating the session state. This design reflects the higher stakes of path-level decisions: changing a student's entire learning trajectory warrants informed consent. The proposal is stored as a pending item; when the student confirms, the router classifies this as a \textit{confirm} intent, and the system commits the path.
+
+\subsubsection{Workflow: Retrieve}\label{subsub:wf_retrieve}
+
+The Retrieve workflow answers factual questions by searching the Educational Knowledge Graph. Its design uses a two-tier retrieval strategy: a fast initial lookup that satisfies most queries, followed by an optional deep analysis that activates only when the system detects a significant knowledge gap.
+
+\input{table/chap4/wf_1.tex}
+
+\paragraph*{Node: RAG\_Core.}
+The first node performs the primary knowledge graph lookup. The agent follows a strict Chain-of-Thought procedure: (1) resolve the concept name to a graph entity identifier using \texttt{entity\_finder} (which queries Wikidata for a canonical ID, then falls back to direct name matching), (2) retrieve all educational content associated with that entity using \texttt{rhetorical\_retriever} (organized by rhetorical role: definition, formula, theorem, example), and (3) submit findings through the designated output schema. The agent is limited to four tool calls to prevent runaway exploration.
+
+\paragraph*{Node: Deep\_Decision.}
+After the initial retrieval, this node evaluates whether the query requires deeper analysis. It receives the RAG\_Core results, the original query, and the student's current position. Operating without tools, it classifies the situation as \textit{DEEP} (the query involves mechanisms or concepts distant from the student's position) or \textit{SKIP} (the basic retrieval suffices). This classification controls the conditional routing to the next node.
+
+\paragraph*{Node: rag\_deep.}
+When activated, this node performs a structural neighborhood analysis of the retrieved entity. Using the \texttt{edge\_explorer} tool, it traverses multi-hop relationships (excluding content edges) to discover parent concepts, prerequisite dependencies, and semantically related nodes. The central objective is to identify \textit{bridge concepts}---prerequisite knowledge the student needs before fully understanding the queried topic.
+\\\\
+The detection of knowledge gaps relies on the same centrality-based framework introduced in the Roadmap workflow (Section~\ref{subsub:wf_roadmap}). Specifically, the agent compares the student's current position against the topological neighborhood of the target concept. Bridge concepts are those nodes that lie on the prerequisite paths between the student's position and the target, ranked by their $C_{deg}$ values. The output includes a knowledge gap score $\gamma \in [0, 1]$ ($0$ = no gap, $1$ = significant gap) and a list of bridge concept nodes. If bridge concepts are identified, the node constructs a \textit{bridge} proposal suggesting that the student's learning path be adjusted to cover the prerequisites first.
+
+\paragraph*{Synthesis: TA\_Retrieve\_Finish.}
+The final node synthesizes all accumulated results---core retrieval content, deep analysis findings, and any bridge proposals---into a student-facing response. If the retrieval found no relevant content, the agent acknowledges this honestly rather than fabricating an answer. The output follows the standard response schema containing a summary, the full formatted message, and an optional front-end navigation action.
+
+\subsubsection{Workflow: Teach}\label{subsub:wf_teach}
+
+The Teach workflow is the most structurally complex sub-workflow and the only one that directly manages the active learning loop: delivering lectures, assessing understanding, and determining when to advance.
 
 \input{table/chap4/wf_3.tex}
 
-\paragraph*{\textbf{Reasoning CoT Loop:}} The Teaching Assistant follows a strict sequence: \textit{Identify the topic to teach} $\rightarrow$ \textit{get the correct page and content} $\rightarrow$ \textit{evaluate if it fits the student's level} $\rightarrow$ \textit{generate a detailed answer} $\rightarrow$ \textit{display the source (PDF)}. 
+\paragraph*{Node: Teach\_Understand.}
+This entry node classifies the student's query within the teaching context into one of three sub-intents: \textit{review}, \textit{continue}, or \textit{evaluate}. When ambiguous, the default is \textit{continue}, ensuring the teaching process moves forward. The classification determines routing: review and continue proceed to content lookup, while evaluate routes directly to the assessment node.
 
-\paragraph*{\textbf{Tools:}} The workflow heavily relies on reference tools. By looking up the concept's hard references, it finds the exact document ID and page number. It then uses pagination tools to extract the specific textbook content for the LLM to read before giving a lecture. This ensures high accuracy and prevents the AI from making up information.
+\paragraph*{Node: Teach\_Lookup.}
+To gather the teaching material for the current concept, this node employs an iterative \textit{Reason-Act} (ReAct) loop. Rather than making a single retrieval call that may return incomplete or irrelevant content, the agent repeatedly reasons about what information is still needed and calls the appropriate tools until it judges the collected context to be sufficient. Figure~\ref{fig:react_teach} illustrates this iterative process.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=1.4cm and 2.2cm,
+    every node/.style={font=\small},
+    startstop/.style={rounded rectangle, draw, fill=blue!8, minimum width=2cm, minimum height=0.7cm, align=center},
+    action/.style={rectangle, draw, fill=green!8, minimum width=2.2cm, minimum height=0.7cm, align=center},
+    decision/.style={diamond, draw, fill=orange!10, minimum width=1.2cm, minimum height=0.7cm, align=center, aspect=2.2},
+    arr/.style={->, >=stealth, thick},
+    darr/.style={->, >=stealth, thick, dashed}
+]
+    \node[startstop] (input) {Input Query};
+    \node[action, right=of input] (context) {Context\\$\mathcal{C} = [\text{input}]$};
+    \node[decision, right=of context] (decide) {Sufficient?};
+    \node[action, below=1.2cm of decide] (tool) {Tool Call:\\get material};
+    \node[startstop, right=of decide] (output) {To Lecture\\Node};
+    
+    \draw[arr] (input) -- (context);
+    \draw[arr] (context) -- (decide);
+    \draw[arr] (decide) -- node[above] {\scriptsize Yes} (output);
+    \draw[arr] (decide) -- node[right] {\scriptsize No} (tool);
+    \draw[darr] (tool.west) -- ++(-1.8,0) node[midway, below, font=\scriptsize] {$\mathcal{C} \leftarrow \mathcal{C} \oplus \text{result}$} |- (context.south);
+\end{tikzpicture}
+\caption{ReAct loop in the Teach\_Lookup node. The agent iteratively gathers material by calling tools (segment retrieval, page extraction) and appending results to the running context $\mathcal{C}$. The dashed arrow represents the context concatenation feedback. The loop terminates when the agent judges the collected content to be sufficient for lecture generation.}
+\label{fig:react_teach}
+\end{figure}
+
+The tools available at this node include \texttt{get\_concept} (resolving the current concept to its \textit{hard reference}---a structured pointer containing the document identifier and page number in the original course material) and \texttt{get\_pages} (extracting specified pages from the stored PDF). The agent reads the retrieved material, evaluates whether it covers the concept adequately, and either proceeds to lecture generation or issues additional tool calls to fetch neighboring pages or related segments. If no hard reference exists, the flow is routed to a RAG fallback node that reuses the retrieval pipeline from the Retrieve workflow (Section~\ref{subsub:wf_retrieve}).
+
+\paragraph*{Node: Teach\_Lecture.}
+The lecture generation node receives the collected source content, the student's current concept position, previously completed concepts, and the recent chat history. In \textit{continue} mode, the agent teaches the concept in depth, breaking the lecture into sections and posing challenge questions. In \textit{review} mode, it focuses on recall and retention testing. The instruction adapts to the student's Bloom's taxonomy level: at lower levels (Remember, Understand), the focus is on definitions and basic recall; at higher levels (Apply, Analyze, Evaluate, Create), the focus shifts to application, reasoning, and synthesis.
+
+\paragraph*{Node: Teach\_Evaluate.}
+When the student submits an answer, this node analyzes the recent interaction history to judge mastery. The agent identifies the questions posed during the session, assesses whether the student's responses reflect genuine understanding or surface-level recall, and renders a pass or fail judgment. This node operates without tools, relying solely on the conversational evidence.
+
+\paragraph*{Node: Next\_Topic.}
+If the evaluation passes, this node selects the next learning target. It retrieves neighboring concept nodes from the graph, ranked by out-degree centrality $C_{deg}$, and presents the candidates to the agent. The agent selects one to three appropriate next topics based on prerequisite relationships and the student's performance. The selected nodes are packaged as an \textit{advance} proposal, which---unlike Roadmap proposals---is applied automatically. If the evaluation fails, the node returns a ``STAY'' action and the student's position remains unchanged.
+
+\paragraph*{Synthesis: TA\_Teach\_Finish.}
+The synthesis node applies any auto-approved proposals (updating the student's graph position), formats the lecture or evaluation feedback into a student-facing response, and---if the source content came from a PDF---attaches a navigation action directing the front-end to display the corresponding document page alongside the generated lecture.
