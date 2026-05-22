@@ -1,12 +1,27 @@
 \chapter{Proposed Methodology and Paradigm}\label{chap:methodology}
+Building on the vision outlined in the requirements specification (Chapter~\ref{chap:req}), this research aims to propose a novel system that combines the strengths of 
+classical Graph-based architectures with the generative capabilities of Large Language Models (LLMs). This chapter details the foundational methodology of our system. 
+\section{Overall Pipeline}
+The proposed paradigm can be constrcuted and visualized as the below pipeline
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{Images/method/pipeline.png}
+    \vspace{8pt}\caption{Macro workflow of the SmartEdu system, illustrating the Knowledge Modelling, Middleware, and Agentic Workflow orchestration.}
+    \label{fig:macro_workflow}
+\end{figure}
+\\\\
+A key security boundary is established at the system's entry point. Upon user authentication, the student's Session and Memo contexts are directly injected into the 
+computational tools. As a result, the agents use these pre-configured tools instead of interacting directly with the database. This approach ensures strict data 
+isolation and prevents the LLM from making unauthorized or destructive database transactions.
 
-Understanding the requirements proposed in Section~\ref{sec:req}, the mission of this research is to propose a novel system that integrates the strengths of classical Graph-based architectures with the generative capabilities of Large Language Models (LLMs), while fundamentally addressing their individual limitations. This chapter delineates the foundational methodology of the system. We present the formal mathematical definitions of the educational knowledge graph, the theoretical justification for the two-phase extraction pipeline, the state-machine abstraction governing the multi-agent workflow, and the graph-theoretic formulation utilized for personalized gap detection.
-
-\section{Knowledge Modelling}
-
-This section proposes a hybrid methodology that anchors the generative flexibility of LLMs to the deterministic rigor of Graph Construction and Natural Language Processing. By mathematically formulating the educational domain as a Property Graph, the proposed system (SmartEdu) achieves a necessary synthesis of semantic richness and logical consistency, overcoming the unstructured chaos often associated with pure generative models.
-
-\subsection{Formal Property Graph Definition and Topological Constraints}
+\section{Knowledge Modelling: Educational Graph}
+This section proposes a hybrid methodology that anchors the generative flexibility of LLMs to the deterministic rigor of Graph Construction and Natural Language Processing. 
+By formulating the educational domain as a Property Graph, the proposed system (SmartEdu) achieves a necessary synthesis of semantic richness and logical consistency, 
+overcoming the unstructured chaos often associated with pure generative models.
+\subsection{Graph Definition}\label{sub:g_def}
+To construct a graph, we need to define and regulate it with a connected, rigorous structure. Simulating educational concepts, the graph contains ontologies as well as 
+topic's relationship like presiquite. The subsequence contents in this subsection explain the deterministic algebra representation and rules explanation of it.
+\subsubsection{Formal Property and Topological Definition}
 
 To accurately represent the vast, interconnected semantic structure inherent in educational curricula, our methodology employs a formal Property Graph formulation. Unlike simple directed graphs, a property graph allows both vertices and edges to possess complex internal states (properties). This multidimensionality is highly suitable for educational knowledge representation, where a concept is not just a node, but a container of definitions, mathematical formulas, and historical context.
 
@@ -24,7 +39,7 @@ where:
 
 The necessity of this mathematical definition lies in its ability to enforce data integrity. By treating the knowledge base as a set $V$ and a mapping $E$, we can apply rigorous graph-theoretic algorithms (such as topological sorting and shortest-path routing) directly to the curriculum, effectively translating human pedagogical intuition into computationally solvable problems.
 
-\subsection{Ontological Hierarchy and Node Classification}
+\subsubsection{Ontological Hierarchy formulation}
 
 To accurately model the multi-scalar nature of educational curricula—ranging from entire academic disciplines down to specific explanatory sentences in a textbook—we artificially constrain the label set $\Lambda$ such that $\Lambda = \{ \text{CommunityNode}, \text{TopicNode}, \text{ConceptNode}, \text{RhetoricalNode} \}$. This rigorous ontological taxonomy ensures structural consistency across different domains:
 
@@ -37,7 +52,7 @@ To accurately model the multi-scalar nature of educational curricula—ranging f
 
 By enforcing this strict hierarchy, the system prevents the "flattening" of knowledge, ensuring that the AI agent can distinguish between a broad topic that requires a multi-week syllabus and a specific concept that can be explained in a single paragraph.
 
-\subsection{Edge Semantics and DAG Constraints}
+\subsubsection{Edge Semantics and DAG Constraints}
 
 The topological structure of $G$ is governed by the relation types assigned to the edges $e \in E$, formulated as ordered pairs $e = (v_i, v_j, \lambda_e)$, where $\lambda_e$ is the edge type. The system defines several core edge types to represent real-world pedagogical connections: $\textit{PART\_OF}$, $\textit{RELATED\_TO}$, and $\textit{PREREQUISITE\_OF}$.
 
@@ -48,20 +63,22 @@ Let $G_{prereq} = (V, E_{prereq})$ where $E_{prereq} = \{ e \in E \mid \lambda_e
     \forall v \in V, \nexists \text{ path } P = (v, \dots, v) \text{ in } G_{prereq}
 \end{equation}
 
-This acyclic constraint is not merely a theoretical preference; it is a foundational mathematical requirement. If a cycle were to exist (e.g., A is a prerequisite for B, B is a prerequisite for C, and C is a prerequisite for A), it would create an unresolvable computational deadlock. The student would be permanently trapped in a circular dependency, unable to satisfy the requirements to begin learning any of the concepts. Enforcing the DAG constraint mathematically guarantees that algorithms like Topological Sorting can be successfully applied to generate optimal, conflict-free learning roadmaps.
+This acyclic constraint is not merely a theoretical preference; it is a foundational mathematical requirement. If a cycle were to exist (e.g., A is a prerequisite for B, 
+B is a prerequisite for C, and C is a prerequisite for A), the student would be permanently trapped in a circular dependency, unable to begin learning any of the 
+concepts. Enforcing the DAG constraint mathematically guarantees that algorithms like Topological Sorting can be successfully applied 
+to generate optimal, conflict-free learning roadmaps.
 
-\section{Two-Phase LLM-Driven Knowledge Extraction Paradigm}
+\subsection{Graph Construction}
 
-A critical challenge in automated knowledge base construction is the extraction of structured, multi-relational topologies from entirely unstructured educational text. Traditional approaches either rely on rigid, rule-based NLP algorithms that fail to capture semantic nuances, or naive LLM prompts that suffer from severe instability.
+A major challenge in building an automated knowledge base is extracting structured relationships from unstructured educational text. Single-pass LLM extractions—where 
+the model tries to identify concepts, classify them, and link them all at once-are extremely prone to failure. Multiple frameworks propose multi\-turn LLM synthesis, but 
+costly and still not guarantee a solid, hallucination immunity graph as subsequence turns increase entropy and the context total amount. I propose a hybrid method of Dual LLM extraction combining with NLP based filtering and normalization,
+guarantee a consistent graph.
+\subsubsection{Dual Phase LLM Extraction}\label{subsub:dual}
 
-\subsection{The Curse of Dimensionality in Single-Pass Extractions}
-Single-pass LLM extractions—where the model is prompted to simultaneously identify concepts, classify them into the ontology, and link them via edges—suffer from the "curse of dimensionality". As the length of the input text grows, the combinatorial explosion of potential edge pairings ($O(N^2)$ for $N$ concepts) overwhelmingly exceeds the model's contextual reasoning capabilities. This high-entropy state frequently leads to severe "hallucinations," dropped entities, and topological inconsistencies (such as violating the aforementioned DAG constraints).
+Dual Phase Extraction Pipeline is one that methodologically decouples top-down hierarchical decomposition from lateral relational mapping. Let $\mathcal{T}$ represent the continuous corpus of unstructured educational text, ingested from raw documents. The overall extraction objective is to discover an approximation function $\Phi: \mathcal{T} \rightarrow (V, E)$ that maximizes semantic fidelity. We mathematically decompose $\Phi$ into two sequential, deterministic mappings.
 
-To enforce structural integrity and minimize the LLM's stochastic entropy, we propose a \textit{Two-Phase Extraction Pipeline} that methodologically decouples top-down hierarchical decomposition from lateral relational mapping.
-
-Let $\mathcal{T}$ represent the continuous corpus of unstructured educational text, ingested from raw documents. The overall extraction objective is to discover an approximation function $\Phi: \mathcal{T} \rightarrow (V, E)$ that maximizes semantic fidelity. We mathematically decompose $\Phi$ into two sequential, deterministic mappings.
-
-\subsection{Phase 1: Top-Down Hierarchical Extraction (Skeleton Phase)}
+\subsubsection*{Phase 1: Top-Down Hierarchical Extraction (Skeleton Phase)}
 
 The primary objective of the first phase is to establish the taxonomic structure of the knowledge domain without the cognitive burden of cross-referencing. The LLM's action space is strictly confined to identifying entities and their subsumption (parent-child) relationships.
 
@@ -70,87 +87,121 @@ We define the skeleton extraction function $\Phi_{\text{skeleton}}$ as:
     \Phi_{\text{skeleton}}: \mathcal{T} \rightarrow (V_{\text{tree}}, E_{\text{tree}})
 \end{equation}
 where $E_{\text{tree}} \subset V_{\text{tree}} \times V_{\text{tree}}$ contains strictly hierarchical edges (e.g., $\textit{PART\_OF}$).
-
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.3\textwidth]{Images/method/g_extract.png}
+    \vspace{8pt}\caption{Dual Phase Extraction}\label{fig:g_ex}
+\end{figure}
 To eliminate ontological drift, the LLM is forced to output data conforming to a rigid, predefined syntactic schema (e.g., strict JSON schema validation). The system parses this structural output to instantiate \texttt{CommunityNode} and \texttt{TopicNode} entities, ensuring that every atomic concept is firmly anchored to a macroscopic curriculum node. 
+\\\\
+Mathematically, this phase yields disjoint taxonomic trees. Because the LLM is only tasked with hierarchical assignment, the spatial complexity is bounded to $O(N)$ 
+parent-child assignments. This drastic reduction in the problem space significantly mitigates the probability of generation errors. To complete the graph, phase 2 
+is executed subsequently.
 
-Mathematically, this phase yields a forest of disjoint taxonomic trees, completely devoid of complex lateral logic. Because the LLM is only tasked with hierarchical assignment, the spatial complexity is bounded to $O(N)$ parent-child assignments. This drastic reduction in the problem space significantly mitigates the probability of generation errors.
+\subsubsection*{Phase 2: Lateral Relational Mapping (Relation Phase)}
 
-\subsection{Phase 2: Lateral Relational Mapping (Relation Phase)}
-
-With the hierarchical skeleton established and mathematically frozen in the database, the second phase focuses on inferring the non-hierarchical, semantic linkages across different branches of the tree. Given the isolated, immutable entity set $V_{\text{tree}}$, the relational extraction function $\Phi_{\text{relation}}$ is defined as:
+With the hierarchical skeleton established and mathematically frozen in the database, the second phase focuses on inferring the non-hierarchical, semantic linkages 
+across different branches of the tree. Given the isolated, immutable entity set $V_{\text{tree}}$, the relational extraction function $\Phi_{\text{relation}}$ is 
+defined as:
 \begin{equation}
     \Phi_{\text{relation}}: (V_{\text{tree}}, \mathcal{T}) \rightarrow E_{\text{lateral}}
 \end{equation}
 where $E_{\text{lateral}}$ encompasses cross-cutting educational dependencies such as $\textit{PREREQUISITE\_OF}$ or $\textit{RELATED\_TO}$.
-
-This decoupling is methodologically paramount. By presenting the LLM with a predefined, validated list of concepts ($V_{\text{tree}}$) and tasking it \textit{only} with edge generation, the problem space is reduced to a binary classification task over possible pairs. The final Educational Knowledge Graph is the formal union of these two sub-spaces: 
+\\\\
+By presenting the LLM with a predefined, validated list of concepts ($V_{\text{tree}}$) and tasking it \textit{only} with edge generation, the problem space is reduced to a binary classification task over possible pairs. The final Educational Knowledge Graph is the formal union of these two sub-spaces: 
 \begin{equation}
     G = (V_{\text{tree}}, E_{\text{tree}} \cup E_{\text{lateral}})
 \end{equation}
+\\\\
+To summarize, it is the operation of extracting potential candidate concepts as taxonomy trees and combine it to make a graph. This paradigm ensures high consistency 
+in the generated graph. It bridges the gap between unstructured educational data and structured property graph by artificially 
+constraining the LLM's action space, partlially preventing hallucinations. By partially, there is a big problem: Phase 2 relies mainly on Phase 1 for a structured and stable 
+output, but what if Phase 1 itself is not a good frame skeleton? To better reconstruct and verify the frame, we use deterministic algorithm and techniques
 
-This paradigm ensures high fidelity in the generated graph. It bridges the gap between unstructured educational data and rigorous property graph formalisms by artificially constraining the LLM's action space, effectively preventing structural hallucinations.
 
-\section{Multi-Agent Orchestration \& State-Machine Abstraction}
+\subsubsection{NLP-Based Concept Filtering and Verification}
 
-The knowledge graph $G$ serves as the static, structural foundation of the system. However, the real-time interaction with a human learner requires a dynamic, adaptive reasoning engine that can navigate $G$ to generate personalized educational responses. 
+Although the Dual-Phase LLM Extraction (Section~\ref{subsub:dual}) significantly reduces hallucination by constraining the model's action space, the raw output of Phase~1 remains susceptible to surface-level inconsistencies: semantically equivalent concepts may appear under distinct lexical forms, and spurious or overly granular entities may be introduced without grounding in established knowledge. To address these issues, a deterministic NLP pipeline is interposed between Phase~1 and Phase~2. This pipeline operates exclusively on the candidate node set $V_{\text{tree}}$ and produces a refined, verified set $V^{*} \subseteq V_{\text{tree}}$ that is subsequently passed to the Relation Phase.
 
-\subsection{Hierarchical State Machine Abstraction}
+The pipeline proceeds through four sequential steps.
 
-Instead of relying on a monolithic, prompt-heavy LLM approach—which is highly susceptible to context-window exhaustion and logical dead-ends—we model the Teaching Assistant (TA) logic as a \textit{Hierarchical State Machine}. In this architecture, individual LLM agents are not treated as generic conversationalists, but as highly specialized "policy functions" operating within mathematically bounded, graph-traversal workflows. 
+\paragraph*{Step 1 — Normalization and Tokenization.}
 
-We formally define the agentic state machine as a tuple:
+Each candidate concept label $v_i \in V_{\text{tree}}$ is first subjected to a standard text normalization procedure. This entails lowercasing, punctuation stripping, morphological lemmatization (reducing inflected word forms to their base lemma), and the removal of domain-agnostic stop words. The resulting form is then decomposed into a set of meaningful unigrams and bigrams, yielding a normalized token set $\mathcal{N}(v_i)$. Formally:
 \begin{equation}
-    \mathcal{M} = (\mathcal{S}, \mathcal{A}, \Sigma, \delta)
+    \mathcal{N}(v_i) = \text{tokenize}\bigl(\text{lemmatize}(\text{lower}(v_i))\bigr) \setminus \mathcal{S}
 \end{equation}
-where:
+where $\mathcal{S}$ denotes the stop-word vocabulary. This normalization step establishes a canonical surface representation for every concept, ensuring that subsequent comparison operations are performed on semantically uniform token sets rather than raw, noisy strings.
+
+\paragraph*{Step 2 — External Validation via DBpedia.}
+
+Following normalization, each candidate concept is submitted to the DBpedia Spotlight entity linking service. For a given concept $v_i$, the system issues a query against the DBpedia knowledge base and retrieves the top-ranked entity annotation along with its associated confidence score $\sigma(v_i) \in [0, 1]$. A concept is retained in the verified set only if:
+\begin{equation}
+    \sigma(v_i) \geq \tau_{\text{dbp}}
+\end{equation}
+where $\tau_{\text{dbp}}$ is a predefined acceptance threshold. Concepts failing this criterion are classified as either hallucinated constructs or excessively fine-grained pseudo-entities that lack grounding in established encyclopedic knowledge, and are subsequently removed from $V_{\text{tree}}$. This external validation step introduces a layer of epistemic accountability, anchoring the knowledge graph to verifiable, real-world concepts rather than model-generated approximations.
+
+\paragraph*{Step 3 — Implicit Clustering via Token Overlap.}
+
+Upon completion of filtering, the retained concepts undergo pairwise token similarity analysis. The Jaccard similarity between two concept representations is computed as:
+\begin{equation}
+    J(v_i, v_j) = \frac{|\mathcal{N}(v_i) \cap \mathcal{N}(v_j)|}{|\mathcal{N}(v_i) \cup \mathcal{N}(v_j)|}
+\end{equation}
+
+This measurement serves two complementary functions. First, concept pairs satisfying $J(v_i, v_j) \geq \tau_{\text{merge}}$ are treated as near-duplicates and consolidated into a single canonical node, thereby eliminating redundancy introduced by paraphrastic variation in the source text. Second, and more significantly, concepts that share a non-trivial common token subset — without necessarily crossing the merge threshold — are grouped into an \textit{implicit cluster}. The intersection $\mathcal{N}(v_i) \cap \mathcal{N}(v_j)$ is used to infer a shared parent topic label; for instance, the concepts ``Machine Learning Algorithms'' and ``Machine Learning Optimization'' both yield the shared token ``Machine Learning'', from which a \texttt{TopicNode} bearing that label is derived. These implicitly discovered topic nodes are then cross-validated against the hierarchical skeleton produced by Phase~1 to either confirm existing \texttt{TopicNode} entries or surface structural gaps in the original extraction.
+
+\paragraph*{Step 4 — Verified Node Caching.}
+
+Once a concept node has successfully traversed Steps~1 through~3 — normalized, externally validated, and cluster-assigned — its canonical representation is persisted in a key-value cache, indexed by its normalized token set $\mathcal{N}(v_i)$. This cache serves three purposes. First, it ensures \textit{idempotency}: if the same concept surface form is encountered across multiple ingested documents, it resolves deterministically to the same canonical node without re-executing the NLP pipeline. Second, it supports \textit{incremental graph construction}: as new educational materials are added to the corpus over time, only genuinely novel concepts need to traverse the full verification pipeline, while previously verified nodes are retrieved directly from cache. Third, it provides the Relation Phase (Phase~2) with a stable, pre-validated entity vocabulary, eliminating the need for redundant lookups during edge generation. The final verified and deduplicated set $V^{*}$ is then passed forward as the immutable input to $\Phi_{\text{relation}}$.
+\section{Teaching Assistance}
+The knowledge graph $G$ serves as the static, structural foundation of the system. However, the real-time interaction with a human learner requires a dynamic, 
+adaptive reasoning engine that can navigate $G$ to generate personalized educational responses. This section uncover the algorithm to
+
+\subsection{Agent Harnessing}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{Images/method/agent_design.png}
+    \vspace{8pt}\caption{Agent Harness architecture demonstrating the localization of text, dynamic schema injection, and Adaptive Middleware orchestration.}
+    \label{fig:agent_harness}
+\end{figure}
+
+Instead of using a single, prompt-heavy LLM, we design the Teaching Assistant logic using an \textit{Agent Harness}. This architecture relies on an \textit{Adaptive Middleware} layer (a feature introduced to frameworks like LangChain in late 2025). This middleware allows for dynamic and adaptive changes that are not possible in standard, static state-graph architectures. This approach offers three main advantages over pre-implemented agents:
+
 \begin{itemize}
-    \item $\mathcal{S}$ is the continuously evolving state space. A state $s \in \mathcal{S}$ encapsulates the entirety of the interaction: the student's cognitive context, the truncated chat history, the active computational tools, and the current sub-graph trajectory.
-    \item $\mathcal{A}$ is a discrete set of specialized intelligent agents (e.g., Router, Retriever, Teacher, Planner), each initialized with a unique system prompt and highly restricted tool access.
-    \item $\Sigma$ is the finite alphabet of intents, representing the macroscopic educational objectives: $\Sigma = \{ \text{retrieve}, \text{roadmap}, \text{teaching}, \text{confirm}, \text{clarify} \}$.
-    \item $\delta: \mathcal{S} \times \Sigma \rightarrow \mathcal{S}'$ is the transition function, dictating the routing between specialized agentic sub-graphs based on the evaluated intent.
+    \item \textbf{Localization of Text (One-to-One Node-Agent Responsibility):} By assigning specific agents to individual workflow nodes, the action space is limited. This prevents the confusion and incorrect tool calls that often happen when a single model tries to handle multiple tasks at once.
+    \item \textbf{Dynamic Memory Injection:} The agent does not have to read long, noisy chat histories filled with raw tool results. Instead, the middleware filters the context and only provides the specific memory and state information needed for the current decision.
+    \item \textbf{Dynamic Schema Definition:} The middleware dynamically injects validation schemas (using Pydantic) based on the active node's function. This ensures that the model's output strictly follows the required format before moving to the next step.
 \end{itemize}
+\subsection{Agentic Workflow}
 
-\subsection{Intent Routing Theory}
+\input{table/chap4/wf.tex}
+\subsubsection{Workflow: Retrieve}
 
-The initial state traversal for any student utterance begins at the Router node. The Router acts as a deterministic classifying agent that evaluates the student's natural language input against their historical state to classify the educational intent $i \in \Sigma$. 
+The Retrieve workflow focuses on answering factual questions by searching the knowledge base.
 
-This classification dictates a definitive branch into highly specialized sub-graphs (e.g., \texttt{WF\_Retrieve} for answering factual queries, \texttt{WF\_Roadmap} for learning path generation, \texttt{WF\_Teach} for active instruction). Because the routing decision is constrained to a finite schema ($\Sigma$), the transition function $\delta$ prevents the system from wandering into undefined operational states. This architectural choice is critical: it guarantees that the conversational agent does not oscillate between contradictory states (e.g., simultaneously trying to search the database and generate a test), ensuring that the workflow always progresses toward a terminal, educationally sound response.
+\input{table/chap4/wf_1.tex}
 
-\section{Educational Logic \& Topological Optimization}
+\paragraph*{\textbf{Reasoning CoT Loop:}} The retrieval agent uses a Chain-of-Thought (CoT) sequence that separates edges from concepts. It first analyzes the graph's structure to understand the context of the user's query. Then, it calls the necessary tools to fetch related sub-graphs and summarizes the final answer.
 
-The ultimate objective of the SmartEdu system is to facilitate adaptive, personalized learning. We approach personalization not as a heuristic approximation or a black-box LLM prompt, but as a formal optimization and graph-traversal problem. This is achieved by continuously measuring the structural discrepancy between the macroscopic curriculum graph and the student's individualized cognitive state, leveraging complex network metrics.
+\paragraph*{\textbf{Tools:}} This workflow uses topology instruction tools. These allow the agent to explore relationships and perform semantic searches without needing to read raw, unstructured data from the database.
 
-\subsection{Course Backbone Extraction via Network Centrality}
+\subsubsection{Workflow: Roadmap}
 
-We define the \textit{Course Backbone}, $G_{B} \subseteq G$, as the optimal, macroscopic topological sorting of the $\text{CommunityNode}$ and $\text{TopicNode}$ entities required to master a discipline. $G_B$ functions as the global objective function of the curriculum, representing the most critical, highly connected concepts.
+The Roadmap workflow acts as the learning planner.
 
-To dynamically extract this backbone without relying on stochastic LLM inference, we employ \textit{Network Centrality Measures} implemented directly on the graph database. Specifically, we utilize Out-Degree Centrality to mathematically identify "Hub Nodes" within the graph. In an educational context, a node with a high out-degree (many outgoing "Prerequisite\_of" edges) represents a foundational concept that is required to understand many subsequent advanced topics.
+\input{table/chap4/wf_2.tex}
 
-For a given educational node $v \in V$, the semantic out-degree $C_{deg}(v)$ is calculated by aggregating all outward-directed educational edges. The centrality function is formally defined as:
-\begin{equation}
-    C_{deg}(v) = \sum_{w \in V} A_{vw}
-\end{equation}
-where $A$ is the adjacency matrix restricted strictly to semantic relationship types. Nodes where $C_{deg}(v) \geq k_{\text{min}}$ (where $k_{\text{min}}$ is a predefined significance threshold) are mathematically classified as Hub Nodes. 
+\paragraph*{\textbf{Reasoning CoT Loop:}} The planner starts by identifying the target course. It follows a sequence: \textit{get\_backbone} $\rightarrow$ \textit{evaluate state} (which checks for knowledge gaps by comparing the course with the student's current mastery) $\rightarrow$ \textit{advise}. To make sure the learning path is logical and sequential, the algorithm uses a technique called "window max sampling" for backbone node discovery. This prevents the learning path from jumping randomly between topics.
 
-By analyzing the graph topology to find these Hub Nodes, the system can automatically construct the optimal learning sequence. This structural abstraction ensures that dynamic roadmap generation is rooted in deterministic network science rather than the probabilistic text generation of an LLM.
+\paragraph*{\textbf{Tools:}} It uses graph exploration tools to retrieve the course backbone. It also uses mastery-filtering tools to compare the required learning path with the student's current progress.
 
-\subsection{Student Mastery-Graph and Mathematical Gap Detection}
+\subsubsection{Workflow: Teach}
 
-Conversely to the global backbone, we define the student's current proficiency as a time-dependent, weighted Ego-Graph, $G_{ego}(t) \subseteq G$. The ego-graph consists of the specific sub-graph of concepts the student has actively interacted with, tested on, and mastered up to time $t$. 
+The Teach workflow manages the active teaching process.
 
-We introduce a mastery function $M_s(v, t) \in [0, 1]$, which quantifies the student's proficiency level for a specific node $v \in G_{ego}(t)$. This function is updated dynamically via educational assessments and continuous interaction monitoring.
+\input{table/chap4/wf_3.tex}
 
-Educational gap detection—the process of finding what a student doesn't know—is formulated purely as a Set Intersection problem. We identify structural deficiencies in $G_{ego}(t)$ relative to the prerequisite constraints of a target node $v_{target} \in G_B$. 
+\paragraph*{\textbf{Reasoning CoT Loop:}} The Teaching Assistant follows a strict sequence: \textit{Identify the topic to teach} $\rightarrow$ \textit{get the correct page and content} $\rightarrow$ \textit{evaluate if it fits the student's level} $\rightarrow$ \textit{generate a detailed answer} $\rightarrow$ \textit{display the source (PDF)}. 
 
-Let $\mathcal{P}(v_{target})$ denote the set of all immediate prerequisite nodes for $v_{target}$, such that for every $u \in \mathcal{P}(v_{target})$, there exists a directed edge $(u, v_{target})$ with the label $\textit{PREREQUISITE\_OF}$.
-
-The knowledge gap, denoted by $\Delta(v_{target}, t)$, is mathematically defined as the subset of prerequisites where the student's mastery falls below a required educational threshold $\tau$:
-\begin{equation}
-    \Delta(v_{target}, t) = \left\{ u \in \mathcal{P}(v_{target}) \mid u \notin G_{ego}(t) \lor M_s(u, t) < \tau \right\}
-\end{equation}
-
-If $\Delta(v_{target}, t) = \emptyset$ (an empty set), the student possesses the necessary cognitive scaffolding to assimilate $v_{target}$, and the state machine transitions directly to the instruction phase. 
-
-However, if $\Delta(v_{target}, t) \neq \emptyset$, the system has identified a critical cognitive deficiency. The methodology dictates that the agentic workflow must recursively perform gap detection on the elements of $\Delta$, effectively utilizing graph traversal algorithms to backtrack through the Course Backbone $G_B$ until a foundational node $u'$ is found where $\Delta(u', t) = \emptyset$.
-
-This rigorous, algorithmic approach to educational planning guarantees that no student is advanced to a complex topic without a mathematically verified mastery of its foundational prerequisites. By intersecting the student's dynamic ego-graph with the rigid prerequisite structure of the property graph, our methodology achieves true adaptive learning, providing a highly scalable and scientifically grounded solution to personalized education.
+\paragraph*{\textbf{Tools:}} The workflow heavily relies on reference tools. By looking up the concept's hard references, it finds the exact document ID and page number. It then uses pagination tools to extract the specific textbook content for the LLM to read before giving a lecture. This ensures high accuracy and prevents the AI from making up information.

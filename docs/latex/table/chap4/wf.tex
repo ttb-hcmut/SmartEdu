@@ -1,0 +1,41 @@
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node/.style={rectangle, draw, rounded corners, minimum width=2.4cm,
+               minimum height=0.7cm, font=\small, align=center},
+  arr/.style={->, thick},
+]
+\node[node, fill=gray!20] (router) {TA\_Router\\{\tiny Intent Classification}};
+
+\node[node, fill=blue!15, below left=1.5cm and 2.5cm of router] (ret) {WF\_Retrieve};
+\node[node, fill=green!15, below left=1.8cm and 0.2cm of router] (road) {WF\_Roadmap};
+\node[node, fill=orange!15, below right=1.8cm and 0.2cm of router] (teach) {WF\_Teach};
+\node[node, fill=purple!10, below right=1.5cm and 2.5cm of router] (prop) {Apply\_Proposal};
+\node[node, fill=red!10, below=3.5cm of router] (unk) {TA\_Unknown\_Finish};
+
+\node[node, fill=blue!8, below=1.5cm of ret] (retf) {TA\_Retrieve\_Finish};
+\node[node, fill=green!8, below=1.5cm of road] (roadf) {TA\_Roadmap\_Finish};
+\node[node, fill=orange!8, below=1.5cm of teach] (teachf) {TA\_Teach\_Finish};
+
+\node[node, fill=gray!30, below=5.5cm of router] (end) {Session Context Saved\\(END)};
+
+\draw[arr] (router) -- node[left, font=\tiny, xshift=-0.2cm] {retrieve} (ret);
+\draw[arr] (router) -- node[left, font=\tiny, yshift=-0.2cm] {roadmap} (road);
+\draw[arr] (router) -- node[right, font=\tiny, yshift=-0.2cm] {teaching} (teach);
+\draw[arr] (router) -- node[right, font=\tiny, xshift=0.2cm] {confirm} (prop);
+\draw[arr] (router) -- node[right, font=\tiny] {unknown} (unk);
+
+\draw[arr] (ret)  -- (retf);
+\draw[arr] (road) -- (roadf);
+\draw[arr] (teach) -- (teachf);
+
+\draw[arr] (retf) |- (end);
+\draw[arr] (roadf) |- (end);
+\draw[arr] (teachf) |- (end);
+\draw[arr] (prop) |- (end);
+\draw[arr] (unk) -- (end);
+\end{tikzpicture}
+\vspace{10pt}
+\caption{Top-level SmartEdu state machine detailing the hierarchical intent routing and background persistence synchronization.}
+\label{fig:smartedu}
+\end{figure}

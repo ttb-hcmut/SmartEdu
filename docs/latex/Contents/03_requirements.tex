@@ -1,43 +1,146 @@
-\chapter{Requirements}\label{sec:req}
-The limitations discussion in Subsection~\ref{sec:gaps} have shaped the vision for an the upcoming researches and developments that will address those gaps and 
-propose comprehensive solutions for an appllicable, scalable educational system. To understand the problems and target system, this section outlines the functional 
-and non-functional requirements. These requirements are derived from the identified gaps as discussed, as well as the specific needs of learners and educators in a 
-dynamic knowledge landscape.
+\chapter{Requirements Specifications}\label{chap:req}
+
+The limitations discussed in Subsection~\ref{sub:gaps} have shaped the technical vision for the proposed system. To address these gaps and deliver a robust, 
+scalable educational platform following our goal (Section~\ref{sec:goal}), this section outlines the explicit Functional and Non-Functional Requirements, as well as 
+visiallizing use---case design. These requirements are derived directly from the systemic constraints and the pedagogical needs of learners for a more personalized, 
+diversed and comprehensive learning assistance system.
+
 \section{Functional Requirements}
 
+\subsection{Knowledge Modelling and Management}
+As a key objective feature, knowledge modelling construct knowledge base, foundation to all other key features. This functional category encompasses the capabilities 
+required to process raw educational inputs into a structured knowledge base.
+
 \begin{itemize}
-    \item \textbf{Automated Knowledge Graph Construction (Knowledge Modelling):} The system must automatically extract entities, relationships, and technical concepts 
-    from academic materials such as PDF textbooks and slides. It must also support clustering these nodes into logical communities or chapters to form structured 
-    learning paths.
-
-    \item \textbf{Intelligent Teaching Assistant (TA Module):} The system must provide an agentic teaching assistant capable of understanding user intents 
-    (Retrieve, Roadmap, Teaching, Clarify, Confirm). It should generate dynamic learning roadmaps based on the student's current position and mastery map. 
-    Furthermore, it must conduct interactive lectures using a Socratic method, verifying understanding via questions, and evaluating user responses to decide 
-    whether to advance to the next topic.
-
-    \item \textbf{Retrieval-Augmented Generation (RAG) Fallback:} The teaching workflow must include a robust fallback mechanism. If specific concepts are missing 
-    from the active document, the system must automatically transition to searching the broader Knowledge Graph to synthesize an answer.
-
-    \item \textbf{Student State Management \& Tracking:} The system must maintain session-based tracking without hardcoding student identities. It must track learning 
-    progress, completed nodes, chat history, and handle pending learning proposals asynchronously.
-
-    \item \textbf{Frontend Auto-Navigation:} The system must be able to return user interface actions (e.g., \textit{ui\_action}) within its responses to 
-    automatically navigate the frontend application to the exact document page being taught.
+    \item \textbf{Data Ingestion and Parsing:} 
+    \begin{itemize}
+        \item The system must be able to ingest unstructured, text-dense academic formats (e.g., PDF textbooks, syllabus guidelines).
+        \item The system must accurately parse text into discrete chunks while retaining crucial positional metadata (e.g., source file origin, exact page numbers).
+    \end{itemize}
+    
+    \item \textbf{Semantic Extraction and Normalization:}
+    \begin{itemize}
+        \item The system must extract fundamental educational concepts and their explicit pedagogical relationships from the ingested text.
+        \item The system must normalize extracted entities to a canonical form to ensure conceptual consistency and prevent any form of semantic fragmentation (even of different course) 
+        across the knowledge base.
+    \end{itemize}
+    
+    \item \textbf{Hierarchical and Relational Organization:}
+    \begin{itemize}
+        \item The system must organize extracted entities into a standardized hierarchical topology.
+        \item The system must automatically group highly related concepts into cohesive educational clusters or chapters.
+        \item The system must explicitly define and store directional "prerequisite" relationships between concepts to enable automated learning path generation.
+    \end{itemize}
+    
+    \item \textbf{Storage Capability:}
+    \begin{itemize}
+        \item The persistence mechanism must guarantee a database structure that facilitates high-speed, complex relational querying and subgraph retrieval during live 
+        interactions.
+        \item To ensure diversity of learning input, storage design must ensure efficient storing of enormous data with reasonable latency. 
+    \end{itemize}
 \end{itemize}
+
+\subsection{Intelligent Teaching Assistance}
+To utilized modeled knowledge base as well as guarantee satisfactory learning experience and result, the design of agentic system that serves as our Teaching Assistance 
+is crucial. This category defines the required behaviors and reasoning capabilities of the automated teaching assistant.
+
+\begin{itemize}
+    \item \textbf{Intent Recognition and Context Orchestration:}
+    \begin{itemize}
+        \item The system must classify user intents (e.g., Retrieve information, Generate roadmap, Clarify concepts) and autonomously route the request to the appropriate internal workflow.
+        \item The system must dynamically gather necessary context before responding, which includes retrieving the student's personal mastery history and the relevant subset of the educational knowledge base.
+    \end{itemize}
+    
+    \item \textbf{Intelligent Reasoning and Supervision:}
+    \begin{itemize}
+        \item The system must support a Socratic teaching interaction; it must be capable of generating probing questions to assess student comprehension 
+        rather than merely providing direct answers.
+        \item The system must objectively evaluate the student's response to determine whether to authorize progression to the next prerequisite topic.
+        \item The system must be able to autonomously detect when it lacks sufficient context to answer a question and execute a fallback strategy that 
+        synthesizes information from the broader knowledge base.
+    \end{itemize}
+    
+    \item \textbf{Response Verifiability and Fallback:}
+    \begin{itemize}
+        \item To guarantee grounded responses, the system must prioritize explicit document referencing, citing exact source pages for its generated answers.
+        \item The system must execute a broader knowledge synthesis fallback only when direct contextual concepts are missing from the immediate document.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Student Interaction and System Navigation}
+This category defines the functional requirements concerning the end-user's experience, accessibility, and direct interaction with the intelligent system.
+
+\begin{itemize}
+    \item \textbf{Identity and Access Security:}
+    \begin{itemize}
+        \item The system must provide secure authentication capabilities (Login/Logout) to uniquely identify users.
+        \item The system must maintain isolated, tamper-proof session states for each user to securely record individual learning progress without cross-user data exposure.
+    \end{itemize}
+    
+    \item \textbf{Interactive Dialogue and Visualization:}
+    \begin{itemize}
+        \item The system must provide a natural language chat interface that supports continuous, multi-turn conversational interactions and real-time streaming responses.
+        \item The system must dynamically render visual learning roadmaps, empowering students to make informed, user-centric choices regarding their educational progression rather than following a static curriculum.
+        \item The interface must consolidate essential learning tools, providing seamlessly integrated functional components such as conversational history logs, a synchronized document viewer, and progress summarization dashboards.
+    \end{itemize}
+    
+    \item \textbf{Advanced Navigation and Content Discovery:}
+    \begin{itemize}
+        \item The system must implement an intuitive, multi-level navigation structure (e.g., breadcrumb trails) to help students orient themselves within complex knowledge hierarchies.
+        \item The system must incorporate a powerful semantic search utility, allowing users to rapidly query and locate specific educational materials, graph concepts, or historical interactions.
+    \end{itemize}
+    
+    \item \textbf{Contextual and Responsive Feedback:}
+    \begin{itemize}
+        \item The system must be capable of emitting explicit interface triggers alongside its textual responses to automatically synchronize the user's interface (e.g., auto-scrolling the document viewer to the exact referenced page).
+        \item Notifications and intelligent pedagogical prompts must be delivered in a non-intrusive, accessible manner that captures user attention while preserving the fluidity of the learning experience.
+    \end{itemize}
+\end{itemize}
+
 
 \section{Non-Functional Requirements}
-
+To create a powerful, reliable, and user-friendly educational platform, the Smart Learning System cannot stop at being functional, but need focusing on efficiency 
+and overall system performance. Thus, it must also adhere to a set of non-functional requirements that govern its 
+performance, scalability, security, and overall user experience.
 \begin{itemize}
-    \item \textbf{Scalability and Modularity (Stateless Singleton Architecture):} The core TA reasoning module must be designed as a stateless singleton. It must handle 
-    concurrent chat sessions by relying solely on injected session IDs and dependency injection, ensuring that memory leaks and state contamination between different 
-    students do not occur.
+    \item \textbf{Scalability and Modularity:}
+    \begin{itemize}
+        \item The backend architecture must be designed as stateless, relying exclusively on external persistence layers for state management to ensure readiness 
+        for future distributed scaling.
+        \item System design must be modular, with clear separation of components reponsibility and dependency to facilitate future enhancements, maintenance, and potential integration of 
+        additional features or third-party services.
+    \end{itemize}
 
-    \item \textbf{Reliability and Determinism:} To minimize Large Language Model (LLM) hallucinations, the system must enforce strict data types using structured outputs 
-    (e.g., Pydantic schemas) for agent decisions. Complex branching logic (like roadmap exploration) should be handled programmatically via Python rather than relying 
-    entirely on LLM prompts.
+    \item \textbf{Resource Optimization and Latency Minimization:}
+    \begin{itemize}
+        \item Operating under the constraint of localized execution, the system must optimize memory and computational overhead, loading resource-heavy 
+        models into memory only when explicitly demanded by an active workflow.
+        \item All resource must be efficiently released immediately after use to minimize the system's memory footprint and ensure responsiveness.
+        \item System must be scheduled to be constantly running, minimizing downtime and waiting time for any task.
+        \item All resource must be managable, specifically for developers and system administrators, but crucial for maintaining system stability and performance.
+    \end{itemize}
 
-    \item \textbf{Performance and Efficiency:} The system must minimize latency by combining tool usage and structured JSON formatting into single LLM passes wherever 
-    possible. Database queries, especially graph traversals in Neo4j, must be optimized to ensure real-time responsiveness during interactions.
-    \item \textbf{Traceability and Observability:} The system must integrate comprehensive telemetry (e.g., Langfuse) to trace every step of the agentic workflows, 
-    logging prompts, tool outputs, and token usage for continuous monitoring and debugging.
+    \item \textbf{Reliability and Determinism:}
+    \begin{itemize}
+        \item The system must mitigate the inherent unpredictability of generative AI by enforcing strict, programmatic data schemas for all internal system communications and decision-making logic.
+        \item Complex analytical tasks, such as calculating knowledge gaps, must be executed via deterministic programmatic logic rather than relying on probabilistic generative approximations.
+    \end{itemize}
+
+    \item \textbf{Observability and Traceability:}
+    \begin{itemize}
+        \item The system must maintain comprehensive telemetry across all automated workflows.
+        \item Database state changes, including knowledge graph updates and student progress logs, must be monitored and saved to enable historical analysis and rollback capabilities.        
+        \item Every automated decision, context retrieval action, and resource consumption metric must be actively logged to provide a transparent audit trail for both system debugging and pedagogical evaluation.
+    \end{itemize}
+    \item \textbf{User Experience and Interface Requirements:}
+    \begin{itemize}
+        \item User interface is focus on the simplicity and intuitiveness, ensuring that users of varying technical proficiency can navigate the system effectively.
+        \item User interface must be responsive and accessible, adhering to modern web standards to ensure compatibility across a wide range of devices and screen sizes (phones, tablets, desktops).
+        \item Client side shouldn't be pulled by heavy backend response latency. It should maintain a fluid, real-time interaction experience, minimizing latency 
+        in response generation and interface updates. Mininizing \texttt{"user experience latency"} regardless of system performance 
+        is a strategic design move to preserve conversational engagement as well as learning interest.
+    \end{itemize}
+
 \end{itemize}
+
+

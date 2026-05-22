@@ -20,30 +20,50 @@ While Large Language Models (LLMs) offer a glimpse into automated resource synth
     \item \textbf{The Reasoning Gap in Pedagogy:} Instruction is a sophisticated, non-linear reasoning task. Current AI systems are largely reactive—proficient in text generation but deficient in long-term goal tracking and proactive guidance. This results in a susceptibility to hallucinations and an inability to execute the "evaluate-and-guide" workflow essential for effective pedagogy.
 \end{itemize}
 
-\section{Goals}
+\section{Goals}\label{sec:goal}
 
-This project aims to bridge the gap between passive content and active learning by developing a personalized AI-driven educational ecosystem. The specific objectives include:
+To address the current limitations, this project aims to design an Intelligent System far beyond serving contents or a simple QA chatbot: a proactive, mastery-oriented 
+learning platform tracking and adapting to student progress by developing \textbf{SmartEdu}—an intelligent, graph-grounded 
+educational ecosystem.. This thesis determined for such a system which capabilities include:
 
 \begin{itemize}
-    \item \textbf{Philosophy of Co-living with AI:} Transforming AI from a simple tool into a pervasive personal assistant that evolves alongside the learner.
-    \item \textbf{Cognitive State Tracking:} Establishing a system to record student progress, identify long-term goals, and objectively evaluate theoretical comprehension through interaction.
-    \item \textbf{Adaptive Learning Trajectories:} Customizing the learning pace and curriculum dynamically, ensuring that the difficulty level remains within the student's "Zone of Proximal Development."
+    \item \textbf{Adaptive Mentorship:} Shifting the educational paradigm from static, linear content delivery systems to an interactive, human-like mentorship 
+    that dynamically reform itself based on student performance.
+    \item \textbf{Data Sovereignty and Localized Execution:} Establishing a sustainable deployment framework that leverages open-weights Small Language Models 
+    (SLMs) and local inference engines, ensuring complete data privacy for student learning behaviors while eliminating recurring API token costs.
+    \item \textbf{Consistent Educational Contents:} Intelligent contents adaptation and generation suffers from hallucinations and key info lost. Mitigating the 
+    hallucination risks inherent in generative AI by anchoring the multi-agent reasoning framework within a 
+    structured knowledge network to enforce academic truthfulness.
+\end{itemize}
+
+Targeted at University students, this educational platform facilitates student self learning, the most important skills in University. 
+To demonstrate practical utility and fulfill the discussed goals of an actionable software solution, the application indentifies the following 
+key features:
+\begin{itemize}
+    \item \textbf{Automated Educational Knowledge Graph (EKG) Engine:} The system automatically ingests unstructured academic materials 
+    (raw PDFs, textbooks, and lecture videos) and constructs a structured knowledge graph. It automatically extracts conceptual hierarchies, 
+    maps prerequisite dependencies, and group related topics into organized clusters.
+    \item \textbf{Dynamic Student Mastery Mapping:} The application implements a continuous storing-and-tracking engine that tracks the student's real-time 
+    comprehension levels, storing historical interaction and cognitive progress securely.
+    \item \textbf{Automated Gap Detection and Pathfinding:} Leveraging graph-traversal and heuristic algorithms, the system choose a good studying path based on 
+    the student's current mastery and state against the EKG backbone. When a target topic is selected, the application automatically identifies missing prerequisite 
+    knowledge and dynamically generates a personalized, non-linear learning path.
+    \item \textbf{Socratic Dialogue and Document Verification:} The user interface provides an interactive teaching assistant that engages students using powerfull 
+    reasoning workflow.
 \end{itemize}
 
 \section{Scope}
 
-To fulfill these goals, the research focuses on the following technical cores:
-
+To fulfill these goals, the research focuses on the following researching scope:
 \begin{itemize}
-    \item \textbf{Knowledge Modeling:} Developing a deterministic "Backbone Graph" that maps semantic connections and context grouping, serving as a structural pattern for LLM reasoning. 
-    \item \textbf{Context Engineering:} Engineering methods to facilitate reasoning across vast, high-density knowledge bases without losing global coherence.
-    \item \textbf{Agent Workflow Orchestration:} Designing multi-agent systems to handle complex, multi-step pedagogical reasoning tasks.
-    \item \textbf{Systemic Architecture:} Implementing clean design patterns optimized for scalable, AI-native educational services.
-    \item \textbf{User Experience (UX):} Creating a dual-interface system featuring real-time agent streaming for interaction and a comprehensive GUI for administrative and roadmap visualization.
+    \item \textbf{Multimodal Information Extraction:} Knowledge of courses from multiple sources (pdf, videos, textbooks) must be well extracted 
+    to consolidate them into a centralized data repository.
+    \item \textbf{Domain Specificity:} The knowledge modeling and extraction processes are limited to well-defined academic disciplines with clear hierarchical structures. Unstructured or subjective domains that lack clear prerequisite dependencies are outside the scope of this research.
+    \item \textbf{Pedagogical Boundaries:} The conversational assistant is strictly restricted to goal-oriented educational support, specifically for assessing 
+    student understanding and explaining course content. Open-domain dialogue, creative writing, and casual chitchat are intentionally disabled.
+    \item \textbf{Infrastructure:} The system optimizes execution using open-weights models to maintain strict data privacy. 
+    \item \textbf{Target User Environment:} The system is modeled and evaluated for a single-institution environment, focusing on the interactions between individual learners and a localized knowledge base, rather than a multi-tenant, global-scale educational network.
 \end{itemize}
-
-
-\section{Thesis structure}
 There are 7 chapters in this project's report:
 
 \begin{itemize}

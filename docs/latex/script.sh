@@ -1,0 +1,1 @@
+xelatex -quiet -interaction nonstopmode main.tex
