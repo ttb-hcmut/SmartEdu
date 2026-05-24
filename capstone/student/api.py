@@ -7,7 +7,7 @@ Student-facing REST endpoints:
   POST /session/start    → (Authenticated) Khởi tạo/lấy chat session, trả về session_id
   DELETE /session/end    → (Authenticated) Hủy chat session hiện tại khỏi memory
 
-Flow chuẩn OAuth-like:
+OAuth-like Standard flow:
   Client ──── POST /login ────► Backend ──── JWT(student_id) ────► Client
   Client ──── POST /session/start [Bearer JWT] ─► Backend ──── session_id ──► Client
   Client ──── POST /ta/chat [session_id] ────────────────────────────────────► TA

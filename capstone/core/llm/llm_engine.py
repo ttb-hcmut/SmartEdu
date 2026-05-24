@@ -31,3 +31,45 @@ class CoreLLMEngine:
 
             self._instances[profile_name] = ChatOllama(**kwargs)
         return self._instances[profile_name]
+    
+    def invoke_with_retry(self, prompt_template, parser, input_data: dict, profile_name: str = None, max_retries: int = None):
+        target_profile = (profile_name or self.config.default_profile).lower()
+        llm = self._get_llm(target_profile)
+        
+        profile_config = self.config.profiles[target_profile]
+        retries = max_retries if max_retries is not None else getattr(profile_config, 'max_retries', 3)
+        
+        chain = prompt_template | llm | parser
+        
+        for attempt in range(retries):
+            try:
+                return chain.invoke(input_data)
+            except OutputParserException:
+                if attempt == retries - 1:
+                    return None
+            except Exception as e:
+                print(f"LLM Error: {str(e)}")
+                if attempt == retries - 1:
+                    return None
+        return None
+
+    async def ainvoke_with_retry(self, prompt_template, parser, input_data: dict, profile_name: str = None, max_retries: int = None):
+        target_profile = (profile_name or self.config.default_profile).lower()
+        llm: ChatOllama = self._get_llm(target_profile)
+        
+        profile_config = self.config.profiles[target_profile]
+        retries = max_retries if max_retries is not None else getattr(profile_config, 'max_retries', 3)
+        
+        chain = prompt_template | llm | parser
+        
+        for attempt in range(retries):
+            try:
+                return await chain.ainvoke(input_data)
+            except OutputParserException:
+                if attempt == retries - 1:
+                    return None
+            except Exception as e:
+                print(f"LLM Error: {str(e)}")
+                if attempt == retries - 1:
+                    return None
+        return None
