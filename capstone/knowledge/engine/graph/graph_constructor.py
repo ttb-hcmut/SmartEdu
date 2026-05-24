@@ -16,7 +16,28 @@ class KG_Handler:
         
 
     def _get_identity(self, name: str):
-        results: Dict = asyncio.run(wiki_resolver([name])).get(name)
+        try:
+            asyncio.get_running_loop()
+            import threading
+            _result = [None]
+            _exc = [None]
+            def _runner():
+                try:
+                    _loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(_loop)
+                    _result[0] = _loop.run_until_complete(wiki_resolver([name]))
+                    _loop.close()
+                except Exception as e:
+                    _exc[0] = e
+            t = threading.Thread(target=_runner)
+            t.start()
+            t.join()
+            if _exc[0]:
+                raise _exc[0]
+            all_results = _result[0]
+        except RuntimeError:
+            all_results = asyncio.run(wiki_resolver([name]))
+        results: Dict = all_results.get(name, {})
 
         wiki_id = results.get("id", None)
         name = results.get("label", name)

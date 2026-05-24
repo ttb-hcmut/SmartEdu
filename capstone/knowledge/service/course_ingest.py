@@ -4,6 +4,7 @@ import os
 import uuid
 from time import time
 import re
+import asyncio
 
 # Logic
 from core.schema.graph.graph import KG_Instance
@@ -11,6 +12,7 @@ from core.util.file_extractor import extract_pdf
 from core.repo.graph.insert import serialize_kg_to_dict
 from core.schema.graph.type import Ref
 from knowledge.engine.extract import GraphExtractionService
+from knowledge.engine.graph.graph_constructor import KG_Handler
 
 #shared
 from core.dependencies import * 
@@ -47,13 +49,15 @@ class CourseIngestionService:
 
         self.config = Ingest_param()
 
-    def _process_slide(self, name: str, course_name):
+    async def _process_slide(self, name: str, course_name, num_workers: int = 3):
 
         file_path = self.config.path  + name
+        chunks: List[Dict[str, str]] = await asyncio.to_thread(
+            extract_pdf, file_path, pages_per_batch=self.config.PAGE_PER_SLIDE
+        )
         
-        chunks: List[Dict[str, str]] = extract_pdf(file_path,pages_per_batch= self.config.PAGE_PER_SLIDE)
-        hard_refs = []
-        texts = []
+        if not chunks:
+            return
 
         with open(file_path, "rb") as f:
             file_bytes = f.read()
@@ -62,7 +66,11 @@ class CourseIngestionService:
                                             course_name=course_name, 
                                             file_data=file_bytes)
         
-        for c in chunks:
+        extract_queue = asyncio.Queue(maxsize=10)
+        hard_refs = []
+        texts = []
+
+        for i, c in enumerate(chunks):
             content = c.get('content', None)
             if not content: continue 
             content: str = clean_content(text=content)
@@ -72,18 +80,29 @@ class CourseIngestionService:
             
             storage_uri = self.minio_repo.upload_chunk(chunk_id=c.get("chunk_id"), content=c.get("content"), name=name, course_name=course_name)
 
-            hard_refs.append(Ref(
+            ref = Ref(
                 db="minio",
                 id=storage_uri,
                 name=clean_slide_name(heading),
-                summary=f"{content[:100]} ......".replace("\n", " "), # Clean summary
+                summary=f"{content[:100]} ......".replace("\n", " "),
                 p_num=c["page_num"]
-            ))
+            )
+            hard_refs.append(ref)
+            await extract_queue.put((i, heading, content, ref))
 
         if not texts:
             return
+        
+        for _ in range(num_workers):
+            await extract_queue.put(None)
 
-        kg_instance: KG_Instance = self.extractor.extract_and_build(texts=texts, course_name=course_name, hard_ref = hard_refs, soft_refs=None)
+        self.extractor.kg_handler = KG_Handler()
+        
+        kg_instance: KG_Instance = await self.extractor.extract_pipeline(
+            extract_queue=extract_queue,
+            course_name=course_name,
+            num_workers=num_workers
+        )
         nodes, edges, clusters = serialize_kg_to_dict(kg_instance)
 
         self.graph_db.import_data(db_name=self.db_name, nodes=nodes, edges=edges, clusters=clusters)
@@ -91,52 +110,60 @@ class CourseIngestionService:
 
         
 
-    def _process_textbook(self,name: str, course_name):
+    async def _process_textbook(self,name: str, course_name, num_workers: int = 3):
         file_path = self.config.path  + name
-        chunks = extract_pdf(file_path, pages_per_batch= self.config.PAGE_PER_TB)
+        chunks = await asyncio.to_thread(
+            extract_pdf, file_path, pages_per_batch=self.config.PAGE_PER_TB
+        )
         
-        for chunk in chunks:
-            text_content = chunk.get("content")
-            chunk_id = chunk.get("chunk_id")
-            heading = chunk.get("heading", "")
-            
-            if not text_content:
-                continue
+        sem = asyncio.Semaphore(num_workers)
+        
+        async def _handle_chunk(chunk):
+            async with sem:
+                text_content = chunk.get("content")
+                chunk_id = chunk.get("chunk_id")
+                heading = chunk.get("heading", "")
                 
-            storage_uri = self.minio_repo.upload_chunk(
-                chunk_id=chunk_id, 
-                content=text_content, 
-                name=name, 
-                course_name=course_name
-            )
-            search_query = f"{heading}: {text_content}"
-            candidates = self.milvus_db.search(query=search_query, embedder=self.embedder, top_k=10)
-            
-            if not candidates:
-                continue
+                if not text_content:
+                    return
+                    
+                storage_uri = self.minio_repo.upload_chunk(
+                    chunk_id=chunk_id, 
+                    content=text_content, 
+                    name=name, 
+                    course_name=course_name
+                )
+                search_query = f"{heading}: {text_content}"
+                candidates = self.milvus_db.search(query=search_query, embedder=self.embedder, top_k=10)
                 
-            links = self.extractor.link_textbook_to_anchors(text=text_content, candidates=candidates)
-            if not links:
-                virtual_id = f"ref_{uuid.uuid5(uuid.NAMESPACE_DNS, chunk_id).hex[:8]}"
-                links = [{
-                    "anchor_id": virtual_id,
-                    "justification": f"Text book related directly to course {course_name} "
-                }]
-            if links:
-                self.graph_db.update_links(chunk_id, heading, storage_uri, links, self.db_name)
+                if not candidates:
+                    return
+                    
+                links = await self.extractor.link_textbook_chunk(text=text_content, candidates=candidates)
+                if not links:
+                    virtual_id = f"ref_{uuid.uuid5(uuid.NAMESPACE_DNS, chunk_id).hex[:8]}"
+                    links = [{
+                        "anchor_id": virtual_id,
+                        "justification": f"Text book related directly to course {course_name} "
+                    }]
+                if links:
+                    self.graph_db.update_links(chunk_id, heading, storage_uri, links, self.db_name)
+        
+        tasks = [asyncio.create_task(_handle_chunk(chunk)) for chunk in chunks]
+        await asyncio.gather(*tasks)
 
     def reset_db(self):
         self.graph_db.reset(self.db_name)
         self.milvus_db.reset()
-    def run(self, req):
+    async def run(self, req):
         start = time()
         if req.reset:
             self.reset_db()
         for slide_file in req.slide_files:
-            self._process_slide(slide_file, req.course_name)
+            await self._process_slide(slide_file, req.course_name)
             
         for textbook_file in req.textbook_files:
-            self._process_textbook(textbook_file, req.course_name)
+            await self._process_textbook(textbook_file, req.course_name)
         print(f" ====>  All finished and takes {time()-start}")
 
     def validate_files(self, names: List[str]):
