@@ -35,7 +35,7 @@
 \setmainfont{Times New Roman}
 
  
-\usetikzlibrary{arrows,snakes,backgrounds,calc,positioning,shapes.geometric}
+\usetikzlibrary{arrows,snakes,backgrounds,calc,positioning,shapes.geometric,shapes.misc}
 \usepackage[unicode]{hyperref}
 \hypersetup{
     colorlinks=true,
@@ -160,6 +160,19 @@ morekeywords={}
 \setlength{\intextsep}{10pt plus 2pt minus 2pt}
 
 \thesislayout
+\setlength{\parskip}{5pt plus 1pt minus 3pt}
+
+\definecolor{S1blue}{RGB}{200,230,250}   % Station 1 blue
+\definecolor{S1draw}{RGB}{30,120,180}    
+\definecolor{workerOr}{RGB}{255,235,200} % Worker/Semaphore orange
+\definecolor{workerDr}{RGB}{230,130,30}
+\definecolor{queuePr}{RGB}{240,220,250} % Queue purple
+\definecolor{queueDr}{RGB}{120,50,150}
+\definecolor{builderGr}{RGB}{210,250,210} % Builder green
+\definecolor{builderDr}{RGB}{40,150,40}
+\definecolor{dbGrey}{RGB}{240,240,240}   % DB grey
+\definecolor{dbDraw}{RGB}{100,100,100}
+
 
 \begin{document}
 \begin{titlepage}
@@ -188,27 +201,29 @@ morekeywords={}
 \end{figure}
 
 \begin{center}
-    {\LARGE \textbf{Report: Specialized Project (CO4029)}} \\[2.0cm]
-    {\Huge \textbf{SmartEdu}} \\[1cm]
-    {\Large \textbf{A Graph-based Intelligent Teaching Assistant}} \\[0.5cm]
-    {\Large \textbf{for Mastery-oriented Learning Roadmap}} \\[0.5cm]
-    {\Large \textbf{Guidance and Supervision}} \\[1.5cm]
-    {\Large Major: Computer Science}
+    {\LARGE \textbf{Report: Specialized Project (CO4029)}} \\[1.0cm]
+%    {\Huge \textbf{SmartEdu}} \\[1cm]
+%    {\LARGE \textbf{A Graph-based Intelligent Teaching Assistant}} \\[0.5cm]
+%    {\LARGE \textbf{for Mastery-oriented Learning Roadmap}} \\[0.5cm]
+%    {\LARGE \textbf{Guidance and Supervision}} \\[1.5cm]
+
+{\LARGE \textbf{Research and Development a smart query solution}\\[0.5cm] }
+{\LARGE \textbf{using Knowledge Graphs and Language Models.}\\[2.0cm] }
+    {\LARGE Major: Computer Science}
 \end{center}
 
 \vspace{0.5cm}
 \begin{table}[h]
 \begin{tabular}{rll}
-\hspace{6 cm} &  \textbf{\Large Council:} {\Large ................................}
+\hspace{6 cm} &  \textbf{\Large Committee:} {\Large HĐ 3CC Đồ án chuyên ngành}
 \\
 \\
 \hspace{6 cm} &   \textbf{\Large Instructor:} {\Large Assoc. Prof. Thoại Nam}
 \\
 \\
-\hspace{6 cm}  &   \textbf{\Large Secretary:} {\Large ................................}
+\hspace{6 cm}  &   \textbf{\Large Secretary:} {\Large Mr. Lê Đình Thuận}
 \\
 \\
-% TKHĐ là THƯ KÝ HỘI ĐỒNG
 \hspace{6 cm} &     \textbf{$\;$ $\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$$\;$ \Large ---o0o---} 
 \\
 \\
@@ -248,8 +263,10 @@ morekeywords={}
 \newpage
 \input{Contents/05_System.tex}
 \newpage
-
-
+\input{Contents/06_Experiments.tex}
+\newpage
+\input{Contents/07_Eval.tex}
+\newpage
 %%%%%%%%%%%%%%%%%OUTRO%%%%%%%%%%%%%%%%%%%
 \bibliographystyle{plain}
 \bibliography{References}
