@@ -60,7 +60,7 @@ If you don't, you might want to install it:
    - docker: https://www.docker.com/products/docker-desktop/ 
 2. Start the database infrastructure via Docker Compose:
    ```bash
-   docker-compose -f core/repo/docker-compose.yaml up -d
+  docker compose -f core/repo/docker-compose.yaml --env-file core/.env up -d
    ```
 3. Install Python dependencies using `uv`:
    ```bash
