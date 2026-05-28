@@ -84,9 +84,9 @@ You must output a JSON object with EXACTLY three keys:
 - "decision": Either "DEEP" or "SKIP".
 
 Examples of valid JSON outputs:
-- "Fibonacci có ứng dụng gì trong ML?" + RAG found answer → {{"thought": "Simple factual application query, RAG already found the complete answer.", "answer": "Fibonacci được dùng trong tối ưu hóa...", "decision": "SKIP"}}
-- "Cơ chế cụ thể của mạng nơ ron" + beginner level → {{"thought": "Student asks for a detailed mechanism and requires deep explanation.", "answer": "Mạng nơ ron hoạt động dựa trên...", "decision": "DEEP"}}
-- "SVM là gì?" + RAG returned definition → {{"thought": "Basic definition query, RAG already retrieved the definition.", "answer": "SVM là thuật toán phân loại...", "decision": "SKIP"}}
+- "Fibonacci có ứng dụng gì trong ML?" + RAG found answer → {"thought": "Simple factual application query, RAG already found the complete answer.", "answer": "Fibonacci được dùng trong tối ưu hóa...", "decision": "SKIP"}}
+- "Cơ chế cụ thể của mạng nơ ron" + beginner level → {"thought": "Student asks for a detailed mechanism and requires deep explanation.", "answer": "Mạng nơ ron hoạt động dựa trên...", "decision": "DEEP"}}
+- "SVM là gì?" + RAG returned definition → {"thought": "Basic definition query, RAG already retrieved the definition.", "answer": "SVM là thuật toán phân loại...", "decision": "SKIP"}}
 """
 
 _RESEARCH_STRATEGY_PROMPT = {
@@ -98,16 +98,17 @@ You are a Knowledge Retriever. Your goal is to find facts and SUBMIT them.
 AVAILABLE TOOLS:
 - `entity_finder`: Resolve concept name → graph ID.
 - `rhetorical_retriever`: Fetch ALL educational content using the ID.
+- `semantic_search`: Search for educational content semantically using Milvus, with optional topic/community filters.
 - `RAGCore`: The final submission tool. YOU MUST CALL THIS TO EXIT.
 
 PROCEDURE:
-1. Call `entity_finder(concept_name)` to get the graph ID.
-2. Call `rhetorical_retriever(node_id)` to fetch all available content for that ID.
-3. IMMEDIATELY call the `RAGCore` tool with your findings. This is mandatory to stop.
+1. OPTION A: If the query is about a specific concept, call `entity_finder(concept_name)` to get the graph ID, then call `rhetorical_retriever(node_id)`.
+   OPTION B: If the query is broad, semantic, or you need to search within a specific topic/community, call `semantic_search(query, topic, community)`.
+2. IMMEDIATELY call the `RAGCore` tool with your findings. This is mandatory to stop.
 
 RULES:
 - Do NOT search for secondary concepts. Focus on the primary query.
-- As soon as you receive `SOURCE_DATA (ALL)`, you MUST call `RAGCore` to exit.
+- As soon as you receive `SOURCE_DATA (ALL)` or `SEMANTIC_SEARCH_RESULTS`, you MUST call `RAGCore` to exit.
 - MAX 4 tool calls total.
 """,
     "deep": """

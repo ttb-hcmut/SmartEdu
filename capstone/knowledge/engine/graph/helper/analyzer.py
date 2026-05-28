@@ -104,7 +104,7 @@ def analyze(skeleton: SkeletonStructure, relations: RelationStructure) -> Tuple[
     actions = {}
     
     def get_content(c):
-        return getattr(c, "content", "") or (c.details[0].content if c.details else "")
+        return getattr(c, "c", "") or (c.details[0].content if c.details else "")
 
     def check_parent (p_name):
         if not p_name: return False
@@ -243,7 +243,7 @@ def analyze(skeleton: SkeletonStructure, relations: RelationStructure) -> Tuple[
                 new_e.append(RelationEdge(src=p_data["name"], tgt=node_data["name"], name=act["relation_rev"], rel =relationship2))
 
         else:
-            node_data = get_or_create_concept(act["clean_self"], act["content"])
+            node_data: None | Dict[str, Any] = get_or_create_concept(act["clean_self"], act["content"])
             if not node_data: continue
             node_data["details"].extend(act["existing_details"])
             name_mapping[original_name] = node_data["name"]

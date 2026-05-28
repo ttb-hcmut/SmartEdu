@@ -105,7 +105,7 @@ class CourseIngestionService:
         )
         nodes, edges, clusters = serialize_kg_to_dict(kg_instance)
 
-        self.graph_db.import_data(db_name=self.db_name, nodes=nodes, edges=edges, clusters=clusters)
+        self.graph_db.import_data(db_name=self.db_name, nodes=nodes, edges=edges, clusters= clusters)
         self.milvus_db.insert_data(nodes=nodes, embedder=self.embedder)
 
         

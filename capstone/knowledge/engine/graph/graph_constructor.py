@@ -99,7 +99,7 @@ class KG_Handler:
             content = rel.rel
             if src_node and tgt_node:
                 self._create_edge(src=src_node, tgt=tgt_node, name=rel.name, content=content)
-
+        self.save_json()
         return self.kg
 
     def _handle_topic_clustering(self, topic_name: str, root_community,wiki_id: Optional[str] = None) -> Cluster:
@@ -163,7 +163,7 @@ class KG_Handler:
             anchor_node = self.kg.nodes[cluster.anchor_node]
             self._create_edge(src=node, tgt=anchor_node, name="BELONGS_TO", content = "Source concept is estimately the foundation and root to the target concept")
 
-    def save_json(self, name: str = "kg.json"):
+    def save_json(self, name: str = "kg_v0.json"):
         data = self.kg.model_dump(exclude_none=True, exclude_defaults=True)
         if 'edges' in data:
             data['edges'] = {str(k): v for k, v in data['edges'].items()}
@@ -171,4 +171,4 @@ class KG_Handler:
                 if isinstance(edge.get('source'), dict): edge['source'] = edge['source']['id']
                 if isinstance(edge.get('target'), dict): edge['target'] = edge['target']['id']
         with open(f"test/graph_const/{name}", "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+            json.dump(data, fp=f, ensure_ascii=False, indent=2)

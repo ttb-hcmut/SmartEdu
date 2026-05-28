@@ -59,13 +59,15 @@ prompt_p1 = ChatPromptTemplate.from_messages([
 
 prompt_p2 = ChatPromptTemplate.from_messages([
     ("system", """You are a Knowledge Graph Relationship Extractor.
-Identify relationships (INCLUDES, PRESIQUITES, CAUSES, RELATED_TO) between concepts.
+Identify relationships (INCLUDES, PRESIQUITES, CAUSES, RELATED_TO,REFER) between concepts.
+     
 ### RELATIONSHIP GUIDELINES:
-    - **PREREQUISITE**: A -> B means concept A must be understood before Concept B (Essential for Microlearning path).
+    - **PREREQUISITE**: A -> B means concept A must be understood before Concept B.
     - **INCLUDES**: A -> B means Concept A is a category that contains Concept B.
-    - **CAUSES/RESULTS_IN**: A -> B means Action in A leads to outcome B (e.g., Complexity -> Overfitting).
-    - **Refer**: A -> B means Concept A refers to Concept B, but they are not strictly prerequisite or inclusive.
-
+    - **CAUSES**: A -> B means Action in A leads to outcome B (e.g., Complexity -> Overfitting).
+    - **RELATED**: A -> B means Concept A relate to Concept B, usually same methods or concept in a big topic.
+    - **REFER**: A -> B means Concept A refers to Concept B, but they are not strictly prerequisite or inclusive.
+### RELATIONSHIP explanation guildline: Explain why the relationship is 
 STRICT RULE: 
     - Only create edges between concepts found in this exact list: [{concept_list}]. Do not invent new nodes.
 

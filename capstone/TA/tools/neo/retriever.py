@@ -6,6 +6,9 @@ from langchain.tools import BaseTool
 from TA.tools.neo.base import *
 from TA.tools.neo.schema import *
 from knowledge.engine.graph.helper.normalize import wiki_resolver
+from core.repo.milvus_db.mil import MilvusDB
+from pydantic import Field
+from typing import Any
 
 
 class EntityFinder(NeoTool):
@@ -123,3 +126,37 @@ class EdgeExplorer(NeoTool):
     async def _arun(self, node_id: str):
         print("aaaaa")
         return self._run(node_id)
+
+class SemanticSearch(BaseTool):
+    name: str = "semantic_search"
+    description: str = "Search for educational content semantically using Milvus, with optional topic/community filters."
+    args_schema: Type[BaseModel] = SemanticSearchInput
+    
+    milvus_db: Any = Field(exclude=True)
+    embedder: Any = Field(exclude=True)
+
+    def _run(self, query: str, topic: Optional[str] = None, community: Optional[str] = None):
+        print(f"Run {self.name} with query: {query}, topic: {topic}, community: {community}")
+        expr_parts = []
+        if topic:
+            expr_parts.append(f'topic == "{topic}"')
+        if community:
+            expr_parts.append(f'community == "{community}"')
+            
+        expr = " and ".join(expr_parts) if expr_parts else None
+        
+        results = self.milvus_db.search(query=query, embedder=self.embedder, top_k=5, expr=expr)
+        
+        if not results:
+            return f"INFO: No semantic matches found for '{query}'."
+            
+        output = []
+        for r in results:
+            score = r.get('score', 0)
+            text = r.get('text', '')
+            output.append(f"- [Score: {score:.4f}] {text}")
+            
+        return f"SEMANTIC_SEARCH_RESULTS for '{query}':\n" + "\n".join(output)
+
+    async def _arun(self, query: str, topic: Optional[str] = None, community: Optional[str] = None):
+        return self._run(query, topic, community)

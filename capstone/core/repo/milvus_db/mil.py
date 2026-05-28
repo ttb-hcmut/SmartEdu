@@ -44,17 +44,25 @@ class MilvusDB:
         fields = [
             FieldSchema(name="id", dtype=DataType.VARCHAR, is_primary=True, max_length=65535),
             FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=65535),
+            FieldSchema(name="name", dtype=DataType.VARCHAR, max_length=255),
+            FieldSchema(name="rrole", dtype=DataType.VARCHAR, max_length=255),
+            FieldSchema(name="topic", dtype=DataType.VARCHAR, max_length=255),
+            FieldSchema(name="community", dtype=DataType.VARCHAR, max_length=255),
             FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=self.dim)
         ]
         schema = CollectionSchema(fields=fields, enable_dynamic_field=True)
         collection = Collection(name=self.collection_name, schema=schema)
         
         index_params = {
-            "metric_type": "L2",
+            "metric_type": "COSINE",
             "index_type": "HNSW",
             "params": {"M": 8, "efConstruction": 64}
         }
         collection.create_index(field_name="embedding", index_params=index_params)
+        collection.create_index(field_name="name", index_name="idx_name")
+        collection.create_index(field_name="rrole", index_name="idx_rrole")
+        collection.create_index(field_name="topic", index_name="idx_topic")
+        collection.create_index(field_name="community", index_name="idx_community")
         collection.load()
         return collection
 
@@ -69,13 +77,22 @@ class MilvusDB:
 
             name = node.get("name", "")
             node_id = str(node.get("id"))
-            text_to_embed = f"{name}: {content}"
+            
+            # Strip out ARTICLE context before embedding
+            text_to_embed = f"{name}: {content}".split("\n**ARTICLE:")[0]
+            
+            topic = str(node.get("topic", ""))
+            community = str(node.get("community", ""))
             
             vector = embedder.get_embedding(text_to_embed)
             
             insert_data.append({
                 "id": node_id,
-                "text": text_to_embed,
+                "text": f"{name}: {content}",
+                "name": name,
+                "rrole": str(rrole),
+                "topic": topic,
+                "community": community,
                 "embedding": vector
             })
 
@@ -83,11 +100,11 @@ class MilvusDB:
             self.collection.insert(insert_data)
             self.collection.flush()
 
-    def search(self, query: str, embedder, top_k: int = 5) -> List[Dict]:
+    def search(self, query: str, embedder, top_k: int = 5, expr: str = None) -> List[Dict]:
         query_vector = embedder.get_embedding(query)
         
         search_params = {
-            "metric_type": "L2",
+            "metric_type": "COSINE",
             "params": {"ef": 64}
         }
         
@@ -96,7 +113,8 @@ class MilvusDB:
             anns_field="embedding",
             param=search_params,
             limit=top_k,
-            output_fields=["id", "text"]
+            expr=expr,
+            output_fields=["id", "text", "name", "rrole", "topic", "community"]
         )
         
         output = []
@@ -105,6 +123,10 @@ class MilvusDB:
                 output.append({
                     "id": hit.entity.get("id"),
                     "text": hit.entity.get("text"),
+                    "name": hit.entity.get("name"),
+                    "rrole": hit.entity.get("rrole"),
+                    "topic": hit.entity.get("topic"),
+                    "community": hit.entity.get("community"),
                     "score": hit.distance
                 })
         return output

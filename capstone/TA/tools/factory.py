@@ -1,5 +1,5 @@
 from typing import List, Dict
-from TA.tools.neo.retriever import EntityFinder, RhetoricalRetriever, EdgeExplorer
+from TA.tools.neo.retriever import EntityFinder, RhetoricalRetriever, EdgeExplorer, SemanticSearch
 from TA.tools.neo.explore import RecommendNew, CourseBackbone, CourseRelevance, OptimalPath
 from TA.tools.minio.pdf_tools import GetConcept, GetPages, FEToPage
 from TA.tools.context_tools import RecallToolResults, RecallThoughts
@@ -30,6 +30,7 @@ class ToolFactory:
             CourseBackbone(engine=self.graph_db, tracker=self.tracker),
             CourseRelevance(engine=self.graph_db, tracker=self.tracker),
             OptimalPath(engine=self.graph_db, tracker=self.tracker),
+            SemanticSearch(milvus_db=self.milvus_db, embedder=self.embedder)
         ]
 
     def get_teach_tools(self) -> List:

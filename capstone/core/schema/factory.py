@@ -14,13 +14,21 @@ class RhetoricalItem(BaseModel):
 
 class ConceptBundle(BaseModel):
     name: str = Field(..., description="Concept described by 4 word max (Ex: Linear Regression)")
+    content: str = Field(..., description="Concept content 20 words: Linear regression is an Machine Learning algorithm to optimize based on a line")
     details: List[RhetoricalItem] = Field(default_factory=list)
 
 class RelationEdge(BaseModel):
-    name: str
+    rel: str = Field(default=..., description="Detailed relationship between source and target explain. ")
+    name: Literal[
+        "INCLUDES",
+        "PREREQUISITE",
+        "CAUSES",
+        "RELATED_TO",
+        "REFER"
+    ] = Field(description="How that relationship is defined/called")
     src: str
     tgt: str
-    rel: str = Field(..., description="Relationship between source and target")
+    
 
 class SkeletonStructure(BaseModel): # Phase 1
     tree: List[ConceptBundle]

@@ -39,16 +39,21 @@ if not os.path.exists(SUBJECT_FILE):
         ]
         f.write("\n".join(defaults))
 
-def load_filter_keywords(filepath):
-    keywords = set()
+def load_filter_scores(filepath):
+    scores = {}
+    generic_words = {"system", "city", "field", "concept", "term", "method", "branch", "discipline"}
     try:
         with open(filepath, "r", encoding="utf-8") as f:
             for line in f:
                 clean = line.strip().lower()
-                if clean: keywords.add(clean)
+                if clean:
+                    if clean in generic_words:
+                        scores[clean] = 0.5
+                    else:
+                        scores[clean] = 1.0
     except Exception:
         pass
-    return keywords
+    return scores
 def invalid_word(text: str) -> bool:
         if re.search(r'\d{3,}', text): return True
         if len(text) < 2: return True
@@ -83,17 +88,17 @@ def nlp_normalize(text: str, doc = None) -> str:
     return result.title() if result.strip() else text.title()
 
 # --- 3. ASYNC WORKER ---
-async def _fetch_single(session, semaphore, search_text, filter_keywords):
+async def _fetch_single(session, semaphore, search_text, filter_scores):
 
     params = {
         "action": "wbsearchentities",
         "format": "json",
         "language": "en",
         "search": search_text,
-        "limit": 5,
+        "limit": 20,
         "type": "item"
     }
-    article =["article", "journal", "publication", "thesis", "paper"]
+    article_kws = ["article", "journal", "publication", "thesis", "paper"]
     async with semaphore:
         try:
             async with session.get(API_URL, params=params) as response:
@@ -105,32 +110,46 @@ async def _fetch_single(session, semaphore, search_text, filter_keywords):
                 
                 if not candidates:
                     return search_text, {"id": None, "error": "Not found", "used_query": search_text}
-                in_case = None
-                for cand in candidates:
+                
+                best_cand = None
+                best_score = 0.0
+                article_desc = ""
+                
+                for i, cand in enumerate(candidates):
                     desc = cand.get("description", "").lower()
-                    if any(kw in desc for kw in filter_keywords):
-                        if any(lk in desc for lk in article):
-                            if in_case is None:
-                                in_case = search_text,{
-                            "id": cand["id"],
-                            "label": cand["label"],
-                            "desc": cand.get("description", ""),
-                            "status": "MATCH"}
-                                
-                        return search_text, {
-                            "id": cand["id"],
-                            "label": cand["label"],
-                            "desc": cand.get("description", ""),
-                            "status": "MATCH"}
-                if in_case:
-                    return in_case
-                return search_text, {"id": None, "error": "No semantic match within filter keywords"}
+                    
+                    current_score = 0.0
+                    for kw, score in filter_scores.items():
+                        if re.search(r'\b' + re.escape(kw) + r'\b', desc):
+                            current_score += score
+                            
+                    if i < 10 and not article_desc:
+                        if any(re.search(r'\b' + re.escape(ak) + r'\b', desc) for ak in article_kws):
+                            article_desc = cand.get("description", "")
+                            
+                    if current_score > best_score:
+                        best_score = current_score
+                        best_cand = cand
+                
+                if best_cand and best_score >= 1.0:
+                    result_desc = best_cand.get("description", "")
+                    if article_desc:
+                        result_desc += f"\n**ARTICLE: {article_desc}"
+                    
+                    return search_text, {
+                        "id": best_cand["id"],
+                        "label": best_cand["label"],
+                        "desc": result_desc,
+                        "status": "MATCH"
+                    }
+                
+                return search_text, {"id": None, "error": "No semantic match with score >= 1.0"}
                     
         except Exception as e:
             return search_text, {"id": None, "error": str(e)}
 
 async def wiki_resolver(queries: list, filter_filepath: str =SUBJECT_FILE , concurrency: int = None) -> dict:
-    filter_keywords = load_filter_keywords(filter_filepath)
+    filter_scores = load_filter_scores(filter_filepath)
     if concurrency is None:
         concurrency = LIMIT
     semaphore = asyncio.Semaphore(concurrency)
@@ -141,7 +160,7 @@ async def wiki_resolver(queries: list, filter_filepath: str =SUBJECT_FILE , conc
         tasks = []
         for q in queries:
 
-            tasks.append(_fetch_single(session, semaphore, q, filter_keywords))
+            tasks.append(_fetch_single(session, semaphore, q, filter_scores))
             
         results = await asyncio.gather(*tasks)
         return {k: v for k, v in results}
