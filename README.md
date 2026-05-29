@@ -10,11 +10,14 @@
 ## 1. Introduction
 **SmartEdu** is a proactive, mastery-oriented educational ecosystem designed to replace traditional linear learning platforms. Instead of static content delivery, it functions as a human-like Teaching Assistant that tracks student progress and dynamically guides them through a highly structured Knowledge Graph.
 
-For detailed mathematical formulations, system design principles, and comprehensive evaluations, please refer to the [Full Project Report](docs/latex/main.pdf).
+For better understanding, we have available resources:
+1. [Full Project Report](docs/latex/main.pdf)
+2. Presentation Slides (COMING IN 1st June)
+3. Live App (COMING IN 15th June)
 
 > [!NOTE]
 > Currently, this system targets and adapts specifically to the academic roadmap of Computer Science.
-
+> This current thesis is at its demo phasea
 ## 2. Core Features
 - **Automated Knowledge Ingestion:** Load unstructured documents (lecture slides, textbooks) and get them analyzed autonomously.
 - **Knowledge Graph Conversion:** Automatically convert your resources into a structured Educational Knowledge Graph (EKG) that maps prerequisites and related concepts.
