@@ -5,6 +5,7 @@ from fastapi import APIRouter, Request, HTTPException, Depends
 from pydantic import BaseModel
 
 from student.auth import get_current_student, User
+from student.memo import generate_uuidv7
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -101,10 +102,14 @@ async def chat_with_ta(
         session_id = _get_session_id(payload, request, current_student)
 
         ta_module = request.app.state.TA
+        tracker = request.app.state.student_tracker
         if not ta_module:
             raise HTTPException(status_code=500, detail="TAModule is not initialized.")
 
-        task_id = str(uuid.uuid4())
+        task_id = generate_uuidv7()
+        chat_id = task_id  # They are the same
+        tracker.mongodb.create_chat(current_student.id, session_id, chat_id, payload.user_input)
+
         # Mark as processing before scheduling so the status endpoint never sees a missing key
         request.app.state.ta_tasks[task_id] = {"status": "working", "agent_name": "TA_Router (Thinking...)"}
 

@@ -13,11 +13,11 @@ DB_NAME = os.getenv("DB_NEO4J_DB_NAME", "test")
 
 @dataclass
 class App_settings:
-    name = "Capstone Gateway"
-    kg_end = "/system/v0/knowledge"
-    ta_end = "/system/v0/ta"
-    stu_end = "/system/v0/student"
-    port = 8001
+    name = "Capstone Gateway" # Doesnt matter
+    kg_end = os.getenv("KG_MODULE_ENDPOINT")
+    ta_end =os.getenv("TA_MODULE_ENDPOINT")
+    stu_end = os.getenv("ST_MODULE_ENDPOINT")
+    port = 5000
 
 
 # Knowledge Module
@@ -44,9 +44,9 @@ class Mil_conf:
 @dataclass
 class Emb_conf:
     model_name: str = os.getenv("EMBEDDING_MODEL", 'allenai/scibert_scivocab_uncased')
-    dim: int = 768
+    dim: int = int(os.getenv("DIM", 768))
     retries = 5
-    max_token = 512
+    max_token = 512 
     
 @dataclass
 class Neo:

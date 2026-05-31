@@ -2,7 +2,7 @@ from typing import List, Dict
 from TA.tools.neo.retriever import EntityFinder, RhetoricalRetriever, EdgeExplorer, SemanticSearch
 from TA.tools.neo.explore import RecommendNew, CourseBackbone, CourseRelevance, OptimalPath
 from TA.tools.minio.pdf_tools import GetConcept, GetPages, FEToPage
-from TA.tools.context_tools import RecallToolResults, RecallThoughts
+from TA.tools.context_tools import RecallToolResults, RecallThoughts, InspectChatHistory
 
 from core.repo.graph.graphdb import GraphDB
 
@@ -48,6 +48,7 @@ class ToolFactory:
             FEToPage(),
             RecallToolResults(),
             RecallThoughts(),
+            InspectChatHistory(),
         ]
 
     def get_teach_lookup_tools(self) -> Dict:

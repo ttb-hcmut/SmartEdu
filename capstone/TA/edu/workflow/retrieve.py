@@ -4,10 +4,10 @@ from langgraph.graph import StateGraph, END
 from typing import Dict, Any
 
 from core.schema.wf_state import AgentState, ConceptNode
-import TA.edu.workflow.prompt as prompt_lib
-from TA.edu.workflow.schema import RAGCore, RAGDeep, DeepDecision
-from TA.edu.workflow.few_shot import get_language_instruction
-from TA.edu.utils import parse_student_state, safe_parse_structured, extract_llm_raw_text
+import TA.edu.helper.prompt as prompt_lib
+from TA.edu.helper.schema import RAGCore, RAGDeep, DeepDecision
+from TA.edu.helper.few_shot import get_language_instruction
+from TA.edu.helper.utils import parse_student_state, safe_parse_structured, extract_llm_raw_text
 
 
 from TA.tracing.tracer import AgentTracer
@@ -178,15 +178,14 @@ async def rag_core(state: AgentState, rag_agent, config):
             import asyncio
             asyncio.create_task(
                 asyncio.to_thread(
-                    tracker.mongodb.push_session_tool_result,
+                    tracker.mongodb.push_chat_message,
                     student_id,
                     config.get("configurable", {}).get("session_id", ""),
                     chat_id,
                     {
-                        "tool_name": "rhetorical_retriever",
-                        "node": "RAG_Core",
-                        "args": {"query": query},
-                        "output": (structured.content or "")[:1000],  # Cap stored payload
+                        "role": rag_agent.name,
+                        "heading": "RAG Core Search",
+                        "message": structured.thought
                     }
                 )
             )

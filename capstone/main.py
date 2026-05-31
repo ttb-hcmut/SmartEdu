@@ -1,5 +1,7 @@
 # main.py (Root)
+import os
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 
@@ -12,6 +14,17 @@ from core.config import App_settings
 
 config = App_settings()
 app = FastAPI(title=config.name, lifespan=lifespan)
+
+# allow the browser frontend to call chat-poll + presigned-upload endpoints directly.
+# origins from env; "*" means all (dev only). bearer header auth, so credentials off.
+_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(knowledge_router, prefix=config.kg_end)
 if config.ta_end:

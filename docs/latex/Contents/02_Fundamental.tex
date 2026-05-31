@@ -148,61 +148,66 @@ Repetition penalty modifies the logits of tokens that have already appeared in t
 
 \subsection{Agentic Systems}
 
-\subsubsection*{AI Agents: Definition and Capabilities}
-An Artificial Intelligence (AI) Agent is a computational system capable of autonomous task execution through the dynamic design of workflows using available tools. 
-AI agents can encompass a wide range of functions beyond natural language processing including decision-making, problem-solving, interacting with external environments, and performing actions.
-
+\subsubsection*{AI Agents}
+An Artificial Intelligence (AI) Agent is a computational system capable of autonomous task execution through the dynamic design 
+of workflows using available tools. AI agents can encompass a wide range of functions beyond natural language processing 
+including decision-making, problem-solving, interacting with external environments, and performing actions.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.6\textwidth]{Images/fundamental/agent.png}
+    \includegraphics[width=0.7\textwidth]{Images/fundamental/agent.png}
     \vspace{12pt}\caption{Basic Single Agent diagram}\label{fig:react}
 \end{figure}
 
 Unlike Large Language Models (LLMs), which produce responses solely based on the static data used to train them and are bounded by fixed knowledge limits, agentic 
 technology uses tool calling on the backend to obtain up-to-date information. They optimize workflows and create subtasks autonomously to achieve complex goals. It is 
-responsible for translating high-level natural language queries into executable workflows. Instead of relying on rigid, pre-programmed paths, the agent dynamically 
-analyzes the request, identifies the necessary tools, and orchestrates them in a sequence that best addresses the user's needs. This allows for a more flexible and 
-adaptive system that can handle a wide variety of queries and tasks without requiring explicit programming for each scenario. 
-
-What truly pushing agentic systems to achive what LLM can't lies in the harnessing of agentic technology. Harness is the process of constructing and integrating 
+responsible for translating high-level natural language queries into executable workflows that complete real life tasks.
+What truly pushing an AI agent to achive what LLM can't lies in the harnessing of agentic technology. Harness is the process of constructing and integrating 
 systems or infrastructure that boosts capabilities into the system. The harnessing of agentic system is critical for the agentic performance, as it enables the system 
-to navigate the complex, multi-step processes required to analyze and retrieve relevant educational content based on user queries.
+to navigate the complex, multi-step processes required in deep reasoning, complex tasks.
 \paragraph*{LLM: The Logical Core}
 Large Language Models (LLMs) serve as the brain of the agent, represent the thinking capability. They provide the reasoning capabilities necessary to interpret vague user queries and orchestrate the appropriate tools to find answers. The LLM is responsible for parsing the user's intent, identifying missing information, and deciding on the next actions. The reasoning and decision-making depend heavily on the type of LLM used. Upon studying the current industry, mainstream types of models include:
 \begin{itemize}
     \item {Reasoning Models: }
 Models such as OpenAI o1 or DeepSeek R1 are optimized for Chain of Thought processing. They excel at complex logical deduction and planning multi-step workflows before taking action. This makes them ideal for the planning phase, where they must decompose difficult user queries into a clear, executable plan before invoking any tools.
     \item {Function Calling Models}
-Models such as GPT-4o or Claude 3.5 Sonnet are fine-tuned specifically to output structured data, such as JSON, rather than just conversational text. This capability is efficient for tool configuration and defining output formats. They are critical for the execution phase, as they can reliably select the correct tools and format the arguments precisely to query the database without syntax errors.
+Models such as GPT-4o or Claude 3.5 Sonnet are fine-tuned specifically to output structured data, such as JSON, rather than just conversational text. 
+This capability is efficient for tool configuration and defining output formats, critical for the execution phase.
     \item {Multimodal Models}
-    Models such as Gemini 1.5 Pro are trained with multimodal input. These models are essential in an educational content analysis context because they can natively understand both text and visual inputs. This allows the agent to process image frames directly alongside the user's text query without needing a separate description tool to translate visuals into text first.
-    
+    Models such as Gemini 1.5 Pro are trained with multimodal input, meaning they can natively understand both text and visual inputs. 
     \item{Lightweight Efficiency Models}
-    Smaller models like Llama 3 8B or GPT-4o-mini are faster and cheaper to run. They are perfect for narrow, repetitive tasks such as summarizing retrieved results or classifying user intent, where the deep reasoning capabilities of a larger model are unnecessary. Moreover, the ability to easily train and fine-tune these models facilitates customization in the design of Agentic systems.
+    Smaller models like Llama 3 8B or GPT-4o-mini are faster and cheaper to run. They are perfect for narrow, 
+    repetitive tasks. Moreover, the ability to easily train and fine-tune these models facilitates customization 
+    in the design of Agentic systems.
 \end{itemize}
-
 
 
 \paragraph*{Context Engineering}
-Context engineering, represent the memorization capacity, involves crafting the environment in which the LLM operates to ensure accurate and consistent outputs. This field includes several topics that govern how the model interacts with data and users.
+Context engineering, represent the memorization capacity, involves crafting the environment in which the LLM operates to ensure 
+accurate and consistent outputs. This field includes several topics that govern how the model interacts with data and users.
 \begin{itemize} 
 
 \item {Prompting Strategies}
-Prompting is the primary method to instruct the agent, helping it understand the goals and constraints it is dealing with. Techniques such as Query Expansion allow the agent to broaden search terms for better recall. Advanced methods like Chain of Thought (CoT) and Language of Thought (LoT) prompt the agent to articulate its reasoning process step-by-step, ensuring that complex logic is handled systematically before a final answer is generated.
+Prompting is the primary method to instruct the agent, helping it understand the goals and constraints it is dealing with. 
+Advanced methods like Chain of Thought (CoT) and Language of Thought (LoT) prompt the agent to expand its reasoning 
+process step-by-step, ensuring meaningful thought process before a final answer is generated.
 
 \item {State Management}
-To maintain a coherent interaction, systems must store chat history and the current state. This allows the agent to understand follow-up questions, such as "What happened after that?", by recalling the context of previous turns. State management ensures the agent knows exactly where it is in a multi-step retrieval process, preventing redundant actions.
+To maintain a consistent workflow, systems must store chat history and the current state. This allows the agent to understand 
+conversation context, the results from tools or other agents. State management ensures 
+the agent knows exactly where it is in a multi-step workflow process, preventing redundant actions or confusion.
 
 \item {Retrieval-Augmented Generation (RAG)}
-Agents cannot remember all the information contained in massive educational repositories, and this data is often dynamic. Retrieval-Augmented Generation (RAG) is used to retrieve external information that is not stored within the LLM's internal weights. RAG ensures the agent gets the needed information only when requested, querying the vector database to fetch relevant lecture segments or metadata to ground its answers in factual evidence.
+Agents cannot remember all the information contained in massive data repositories, so RAG is used to retrieve external 
+information that is not stored within the LLM's internal memory. RAG ensures the agent gets the needed information by querying 
+relevant data segments or metadata to ground its answers in factual evidence.
 \end{itemize}
 \paragraph*{Tool Integration}
 Represent the action capacity, tool integration is the process of connecting external resources (systems, software, hardware) or APIs to the agent, allowing it to perform specific functions that 
-are beyond the capabilities of the LLM alone. This is critical for a automated system, as it enables the agent to interact and manipulate data in real-time. This helps 
-agent 
-truly integrate with the external world, understand its mission from practice instead of static texts, while also pose significant threats of misuse, when agent cause 
-real life mistake and fail to judge. The key to effective tool integration is ensuring that the agent can seamlessly call these tools with the correct parameters and interpret their outputs correctly to inform its next steps.
+are beyond the capabilities of the LLM alone. This is critical for a automated system, as it enables the agent to
+truly interact with the external world, understand and complete its mission from practice instead of static texts, while also pose significant 
+threats of misuse, when agent cause 
+real life mistake and fail to judge. 
 
 \subsubsection*{Agent Frameworks}
 The concept of an Agentic Framework arises from a practical necessity: building reliable autonomous systems requires more than just smart models; it requires a strong structure. Retraining Large Language Models to handle every specific rule or task is extremely expensive and inefficient. Therefore, the industry has shifted towards Agent Frameworks—software architectures designed to control and improve the behavior of AI without changing the model itself.
@@ -236,46 +241,37 @@ error handling to facilitate smooth interactions.
 The specific usecase of a our educational system necessitate a flexible, nonlinear, more orchestrated approach. While numerous frameworks exist to harness the 
 capabilities of Large Language Models (LLMs), the intricate requirements of  guidance necessitate a high-level, state-aware framework.
 
-Unlike traditional chains or data-centric frameworks like LlamaIndex and SDK, LangGraph is built upon a \textit{State Graph Architecture} where the system is modeled 
-as a directed graph. In this paradigm, each node represents a specialized agent or a discrete computational step, while the edges dictate the transition logic based on the system’s current state. This modularity facilitates a sophisticated level of {Localized Context Management}. Iinstead of burdening a single agent with a big context pile of conversation history, dozen of tools and various educational usecase , the system maintains a shared State object. By granting each agent access only to the specific subset of information required for its immediate task—such as the active knowledge node or the latest student response—LangGraph ensures high-precision reasoning and mitigates the risk of context dilution while maintaining an optimized prompt size.
-
-This granular control over context directly enables {Non-linear Branching}, allowing the system to mirror the complexity of human instruction. 
-Because the workflow is state-aware, the system can gracefully navigate diverse academic scenarios, utilizing cycles and conditional logic to adapt to the learner's performance. For instance, if a student demonstrates a conceptual misunderstanding, the graph can autonomously trigger a "recovery" branch to revisit foundational prerequisites before returning to the primary roadmap. This deterministic yet flexible orchestration ensures that the AI can handle multifaceted educational use cases without losing track of the student's long-term learning objectives, a feat that is statistically difficult to achieve with stateless or purely autonomous agent frameworks.
+Unlike sequential or data-centric frameworks like LlamaIndex and SDK, LangGraph is built upon a \textit{State Graph Architecture} where the system is modeled 
+as a directed graph. In this paradigm, each node represents a specialized agent or a discrete computational step, while the edges 
+dictate the transition logic based on the system’s current state. 
+This granular control over the workflow direction orchestration enables {Non-linear Branching}, allowing the system to perform multipath reasoning for unrepetitive, complex tasks. 
+Considering educational usecase, since the workflow is globally state-aware, it can gracefully navigate diverse educational use 
+cases, without losing track of the student's long-term learning objectives, a feat that is statistically difficult to achieve 
+with stateless or purely sequential agentic frameworks.
 \input{table/chap2/frameworks.tex}
 
-These survey of various frameworks highlights LangGraph as top framework for educational system. While LlamaIndex offers stable operation with full control data, 
+The survey of various frameworks shown in~\ref{tab:frameworks} highlights LangGraph as top framework for educational system. While LlamaIndex offers stable operation with full control data, 
 its data-centered nature often obscures the complex logic and asynchronization required for student-teacher interaction. 
 The Google Generative AI SDK, though efficient for direct tool integration, lacks the complex state-management infrastructure necessary to handle the unstable nature of 
 complex workflow, comparing to predecessor framework. Ability to maintain a persistent state and manage non-linear transitions of LangGraph and CrewAI provides the 
 deterministic backbone required to facilitate a truly adaptive and reliable learning experience.
 \subsection{System Design}
 
-This section elucidates the software engineering principles, architectural patterns, and technological foundations utilized to construct the 
-proposed system. Given the integration of high-latency AI inference with real-time educational interactions, the design strictly prioritizes modularity, 
-robust state management, and horizontal scalability. Specifically, it focuses on adapting traditional paradigms to handle the non-deterministic and asynchronous 
-nature of Large Language Model (LLM) orchestration and heavy multimedia processing workflows.
-
-\subsubsection*{Software Paradigm: Object-Oriented Programming}
-Object-Oriented Programming (OOP) is a programming paradigm based on the concept of "objects" which can contain data in the form of fields (attributes) and code in the form of procedures (methods). In this paradigm, computer programs are designed by making them out of objects that interact with one another. Fundamentally, this paradigm relies on four core concepts:
-\begin{itemize}
-    \item Class: A blueprint or template for creating objects, defining the initial state and behavior.
-    \item Object: A specific instance of a class, representing a concrete entity within the system memory.
-    \item Attribute: Variables bound to an object that represent its internal state or data.
-    \item Function (Method): Procedures associated with a class that define the behaviors or actions an object can perform.
-\end{itemize}
+This section explain the software engineering principles, architectural patterns, and technological foundations utilized to construct  
+scalable, AI integrated systems. 
+Object-Oriented Programming (OOP) is a programming paradigm based on the concept of "objects" which can contain data in the form of fields (attributes) and code in the form of procedures (methods). 
 In the context of System Design, OOP is the dominant industry standard because the core components of this architecture are inherently stateful. Unlike simple functional scripts that execute and exit, system components must maintain persistent internal states—including conversation history, active tool configurations. The OOP provides the natural structural to manage this state lifecycle. The system leverages the four main pillars of OOP:
 
 \begin{itemize}
     \item Abstraction: This allows the system to model complex entities by hiding internal implementation details and exposing only relevant operations, allowing the outside workflow logic to interact with high-level methods rather than raw data from lower components.
     
-    \item Encapsulation: Groups related variables and functions into a single unit, protecting the internal state from unintended interference. This ensures that the memory of one component is strictly isolated and cannot be corrupted by the operations of another component running in parallel.
+    \item Encapsulation: Groups related variables and functions into a single unit, protecting the internal state from unintended interference.
 
-    \item Inheritance: This promotes code reusability by allowing new classes to derive properties from existing ones. We utilize a base class to define shared logic such as error handling, logging, and connection management. Specialized classes then inherit these foundational capabilities while implementing their specific unique behaviors, significantly reducing code duplication.
+    \item Inheritance: This promotes code reusability by allowing new classes to derive properties from existing ones. Specialized classes then inherit 
+    these foundational capabilities while implementing their specific unique behaviors, significantly reducing code duplication.
 
     \item Polymorphism: This allows objects of different classes to be treated as objects of a common superclass. In the orchestration layer, the system can iterate through a diverse list of components—such as different retrieval engines or analysis modules—and trigger their execution loops using a uniform interface. The orchestrator does not need to know the specific type of component it is invoking, only that every component adheres to the expected interface contract.
 \end{itemize}
-
-\subsubsection*{System Architecture: Microservices and Modular Monolithic}
 
 System architecture defines the overall structure of a software system, organizing its major components and how they communicate. Major applications start with 
 a {Modular Monolithic Architecture}. Unlike a traditional monolith where code is heavily tangled, a modular monolith compiles the application as a single 
@@ -287,12 +283,10 @@ ensures fast internal communication, and makes the codebase easier to test and d
     \vspace{12pt}\caption{Comparison of Microservice and Monolithic architecture}\label{fig:micro_vs_mono}
 \end{figure}
 
-
 However, as system demands grow, combining heavy processing tasks with basic web routing in a single program can cause performance bottlenecks. 
 Microservices take the next step by turning logical modules into physical, independent services. Each service runs in its own process, 
 often with its own separate database, and communicates with other services using standard protocols like REST APIs or message brokers.
-
-Therefore, the Microservices architecture inherits the organizational advantages of the Modular Monolith, while providing several additional merits:
+This architecture inherits the organizational advantages of the Modular Monolith, while providing several additional merits:
 \begin{itemize}
     \item {Independent Scalability:} Microservices allow different parts of the system to scale separately. For example, a heavy processing service can be upgraded with more computing power or duplicated without needing to scale the lightweight web server. This ensures efficient hardware use during high traffic.
     
@@ -301,16 +295,14 @@ Therefore, the Microservices architecture inherits the organizational advantages
     \item {Technology Flexibility:} Microservices allow developers to choose the best programming language or tool for each specific task. For instance, data science components can be built using Python for its machine learning libraries, while high-speed API routing can be written in Go or Node.js.
 \end{itemize}
 
-Alongside these benefits, Microservices possess some intrinsic disadvantages:
+Alongside these benefits, Microservices possess some intrinsic disadvantages. Internal function calls in a monolith are extremely fast. In microservices, these are replaced by network requests over the internet or local network, which inherently adds delay and processing overhead.
+Moreover, managing, monitoring, and deploying multiple independent services with separate databases is significantly harder than 
+deploying a single program. It also requires complex strategies to keep data consistent across independent services.
 
-\begin{itemize}
-    \item {Network Latency:} Internal function calls in a monolith are extremely fast. In microservices, these are replaced by network requests over the internet or local network, which inherently adds delay and processing overhead.
-    \item {Operational Complexity:} Managing, monitoring, and deploying multiple independent services with separate databases is significantly harder than deploying a single program. It also requires complex strategies to keep data consistent across the entire network.
-\end{itemize}
 
 \subsection{Technology Stack and Frameworks}
-The selection of frameworks is driven by the need for high-performance Python execution and seamless integration with AI libraries. These frameworks are chosen to 
-building block for the implementation of the application layer, providing the necessary tools and abstractions to manage the complex interactions between the backend, frontend, and AI components. 
+The selection of frameworks is driven by the need for high-performance system with seamless AI integration. The following frameworks are  
+effective building blocks for the implementation of the application layer.
 \subsubsection*{Backend Development}
 Backend development serves as the foundational logic of any software application, responsible for data processing, security, and the orchestration of communication between the database and the client. It handles the business logic that users do not see but rely upon for functionality. For an intelligent educational system involving heavy AI workloads, the backend must be capable of handling high-concurrency requests without latency, ensuring that the complex computations of the agents do not block the user experience.
 \begin{figure}[H]
@@ -440,8 +432,6 @@ MongoDB serves as the high-performance document store for managing the semi-stru
 While RDBMS and NoSQL excel at storing alphanumeric data, they are fundamentally inefficient for storing massive binary large objects (BLOBs) like lecture recordings, leading to database bloat and performance degradation. Object Storage systems like MinIO treat data not as a file hierarchy or a table, but as discrete objects stored in a flat address space.
 
 High-performance architectures utilize Object Storage to handle the High Volume nature of raw educational media. It utilizes Erasure Coding—a mathematical algorithm that splits data into fragments and expands them with redundant data pieces—allowing for data recovery even if multiple drives fail. This approach decouples storage from compute; the heavy educational artifacts are offloaded to Object Storage, while the databases store only the lightweight reference pointers (URLs) to these objects.
-
-\subsubsection{MinIO: Object Storage}
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.3\textwidth]{Images/system/filestorage/minio.jpg}
@@ -467,8 +457,6 @@ Milvus is the chosen vector database engine for SmartEdu. It indexes high-dimens
 \end{itemize}
 
 \subsubsection*{Graph Database}
-While vector databases handle semantic similarity, the structural relationships between educational concepts—such as prerequisites and curriculum hierarchies—are best modeled as a graph. 
-
 Neo4j is utilized to store the "Backbone Graph" of the knowledge base. It represents educational entities (concepts, lessons, modules) as nodes and their pedagogical relationships as directed edges. 
 \begin{itemize}
     \item Multi-hop Reasoning: Unlike relational databases that require expensive JOIN operations, Neo4j allows for efficient traversal of deep relationship chains. This is critical for detecting knowledge gaps that may span multiple prerequisite levels.
@@ -477,8 +465,7 @@ Neo4j is utilized to store the "Backbone Graph" of the knowledge base. It repres
 \end{itemize}
 
 \subsubsection*{Database Management and Observation}
-Managing multiple heterogeneous database engines requires a unified observation layer to ensure data consistency and facilitate debugging during development.
-
+Managing multiple database engines requires a unified observation layer to ensure data consistency and facilitate debugging during development.
 DbGate is an open-source, multi-database manager used as the primary dashboard for the SmartEdu infrastructure. It provides a unified web interface to inspect and manipulate data across MySQL and MongoDB instances simultaneously.
 \begin{itemize}
     \item Unified Interface: Reduces the overhead of switching between multiple specialized management tools.
@@ -488,7 +475,8 @@ DbGate is an open-source, multi-database manager used as the primary dashboard f
 
 \subsection{Deployment and Containerization}
 Deplloyment is the process of making a software application available for real applicational usage. This section discusses the deployment strategy and the use of containerization to ensure that the system can be reliably and efficiently deployed for our AI pipeline and high\-performance stacks as discussed above.
-\subsubsection*{Docker}
+
+%\subsubsection*{Docker}
 Docker~\cite{docker_docs} is a containerization platform that enables developers to bundle applications and their required components into isolated units called {containers}. Each container acts as a lightweight, virtualized environment that includes all the necessary elements for the application to run. Because containers are portable and consistent, they work reliably across various environments such as on-premise systems, cloud platforms, and clustered infrastructures.
 \begin{itemize}
     \item {Portability:} A major advantage of Docker is its strong portability. Containers package the application together with all its dependencies, making it simple to move workloads between different environments without compatibility issues. Whether running on a local machine or a cloud server, a Docker container behaves the same way, ensuring consistency throughout the development and deployment pipeline.
@@ -591,7 +579,6 @@ The increasing accessibility and reasoning capabilities of Generative AI tools h
 transforming traditional teaching and learning paradigms~\cite{AI_in_Edu}. Modern LLM agents are proved to be capable of autonomous reasoning, 
 tool manipulation, and orchestrating complex academic tasks. 
 
-\subsubsection*{Advances in Educational Agents}
 Recent surveys highlight the versatility of LLM agents in automating multifaceted educational workflows, ranging from curriculum design to generating highly contextualized 
 feedback~\cite{llm_in_edu}. These agents operate dynamically, leveraging multi-hop reasoning and continuous interaction to adapt to a student's cognitive state. A qualitative study involving educators demonstrated that the core impact of generative models spans three critical pillars: active teaching and learning, administrative automation, and personalized assessments~\cite{AI_in_Edu}. 
 
@@ -600,26 +587,15 @@ AI-based software, the course successfully approximated a 1:1 teacher-to-student
 students toward conceptual understanding rather than merely offering outright code solutions. This constrained autonomy proved highly effective in code explanation, 
 style improvement, and administrative querying, demonstrating the practical viability of AI as a ubiquitous teaching assistant~\cite{ai_4_CS50}.
 
-\subsubsection*{Challenges and Deployment Bottlenecks}
 Despite the profound opportunities, deploying LLM agents in educational ecosystems introduces substantial systemic and ethical challenges. The inherent probabilistic 
-nature of LLMs frequently leads to "hallucinations," where the model confidently generates factually incorrect or pedagogically flawed information. Furthermore, 
-there is a significant risk of cognitive offloading, where students develop an overreliance on AI, thereby degrading their independent problem-solving 
-skills~\cite{llm_in_edu}. 
-
-From a practitioner's perspective, integrating these models into open-source or institutional infrastructure often encounters severe operational bottlenecks. 
-Empirical analyses of LLM-based open-source projects categorize these challenges primarily into model configuration issues, connection instabilities, and feature 
-misalignment, all of which hinder seamless deployment~\cite{open_source_isue}. Furthermore, theoretical analyses of LLM representations reveal phenomena such as 
+nature of LLMs frequently leads to "hallucinations," where the model confidently generates factually incorrect or flawed information. Theoretical analyses of LLM representations reveal phenomena such as 
 "semantic collapse," where the continuous manifold of the model's activations struggles to maintain stable, logically sound ontologies over continuous, long-term 
-reasoning tasks without rigid architectural constraints~\cite{semantic_collapse}. These limitations emphasize the need for robust frameworks to 
-tightly navigate the semantic boundaries for AI agents in an academic context.
+reasoning tasks~\cite{semantic_collapse}. 
 
-\subsubsection*{Agentic Workflows}
-As educational AI transitions from static next-token prediction to autonomous multi-agent collaboration, ensuring the reliability, alignment, and transparency of 
-these systems becomes a critical engineering challenge. Traditional benchmarks, which typically evaluate single-response accuracy, are inadequate for assessing the 
-non-linear, multi-step nature of agentic workflows. 
-
-This necessitates the development of rigorous, process-aware evaluation frameworks. Architectures like the Adaptive Evaluation Multi-Agent (AEMA) framework have been 
-proposed to address this gap. AEMA provides an auditable, multi-step evaluation mechanism that operates under human oversight, ensuring that the agents' internal 
+To pintpoint this, researches educational AI Application shift from static next-token prediction to autonomous agentic system,
+aiming for frameworks that tightly navigate the semantic boundaries for AI agents in an academic context,
+ensuring the reliability, alignment, and transparency of AI results. Architectures like the Adaptive Evaluation Multi-Agent (AEMA) framework have been 
+one of the latest proposal to address this gap. AEMA provides an auditable, multi-step evaluation mechanism that operates under human oversight, ensuring that the agents' internal 
 decision-making processes, tool selections, and collaborative strategies are verifiable and transparent~\cite{AEMA_agentic_eval}. Implementing such verifiable 
 frameworks is essential to mitigate the risks of unconstrained autonomy, ensuring that the integration of AI into education remains both trustworthy and pedagogically effective.
 

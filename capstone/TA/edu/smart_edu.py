@@ -7,16 +7,17 @@ from langgraph.graph import StateGraph, END
 from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import AIMessage
 
-import TA.edu.workflow.prompt as prompt_lib
-from TA.edu.workflow.few_shot import format_few_shot, get_language_instruction
-from TA.edu.workflow.schema import RouterDecision
+import TA.edu.helper.prompt as prompt_lib
+from TA.edu.helper.few_shot import format_few_shot, get_language_instruction
+from TA.edu.helper.schema import RouterDecision
 from core.schema.wf_state import AgentState, ConceptNode, TAOutput
 
 from TA.edu.workflow.retrieve import build_retrieve_wf
 from TA.edu.workflow.roadmap import build_roadmap_wf
 from TA.edu.workflow.teach import build_teach_wf
 
-from TA.edu.utils import parse_student_state, safe_parse_structured, extract_llm_raw_text
+from TA.edu.helper.utils import parse_student_state, safe_parse_structured, extract_llm_raw_text
+from TA.edu.helper.context import extract_ta_context
 import os
 from TA.tracing.tracer import AgentTracer
 
@@ -38,18 +39,7 @@ def _tracer_ctx(config: RunnableConfig):
     return c.get("tracer"), c.get("chat_id", "")
 
 
-def _extract_ta_context(state: AgentState, max_msgs: int = 3) -> str:
-    """ Extract last N assistant messages for TA context injection"""
-    messages = state.get("messages", [])
-    ta_msgs = []
-    for msg in reversed(messages):
-        if hasattr(msg, "type") and msg.type == "ai":
-            ta_msgs.append(msg.content)
-        elif isinstance(msg, dict) and msg.get("role") == "assistant":
-            ta_msgs.append(msg["content"])
-        if len(ta_msgs) >= max_msgs:
-            break
-    return "\n---\n".join(reversed(ta_msgs))
+
 
 
 class SmartEdu:
@@ -201,11 +191,11 @@ class SmartEdu:
         # --- Background: memoize & persist (non-blocking, atomic $push) ---
         async def _bg_retrieve(ta_out: TAOutput, cid: str):
             if uid and cid:
-                tracker.mongodb.push_session_thought(
+                tracker.mongodb.push_chat_message(
                     uid, sid, cid,
-                    {"node": "TA_Retrieve_Finish", "thought": ta_out.summary, "status": "SUCCESS"}
+                    {"role": ta.name, "heading": "Synthesizing Retrieval", "message": ta_out.summary}
                 )
-            await self._save_ta_memo(sid, tracker, ta_out)
+            await self._save_ta_memo(sid, cid, tracker, ta_out)
             tracker.save_state(sid)
 
         asyncio.create_task(_bg_retrieve(ta_output, chat_id))
@@ -266,7 +256,7 @@ class SmartEdu:
             prompt = f"{language_instruction}\n\nFriendly narrative response for this roadmap and pedagogical advice:\n{advice}"
 
         ## -- Inject prior TA messages for coherence
-        ta_context = _extract_ta_context(state)
+        ta_context = extract_ta_context(state)
         if ta_context:
             prompt = f"[Prior TA reasoning]:\n{ta_context}\n\n{prompt}"
 
@@ -295,11 +285,11 @@ class SmartEdu:
         # --- Background: memoize & persist (non-blocking, atomic $push) ---
         async def _bg_roadmap(ta_out: TAOutput, cid: str):
             if uid and cid:
-                tracker.mongodb.push_session_thought(
+                tracker.mongodb.push_chat_message(
                     uid, sid, cid,
-                    {"node": "TA_Roadmap_Finish", "thought": ta_out.summary, "status": "SUCCESS"}
+                    {"role": ta.name, "heading": "Planning Roadmap", "message": ta_out.summary}
                 )
-            await self._save_ta_memo(sid, tracker, ta_out)
+            await self._save_ta_memo(sid, cid, tracker, ta_out)
             tracker.save_state(sid)
 
         asyncio.create_task(_bg_roadmap(ta_output, chat_id))
@@ -343,7 +333,7 @@ class SmartEdu:
         )
 
         ## -- Inject prior TA messages for coherence
-        ta_context = _extract_ta_context(state)
+        ta_context = extract_ta_context(state)
         if ta_context:
             prompt = f"[Prior TA reasoning]:\n{ta_context}\n\n{prompt}"
 
@@ -372,11 +362,11 @@ class SmartEdu:
         # --- Background: memoize & persist (non-blocking, atomic $push) ---
         async def _bg_teach(ta_out: TAOutput, cid: str):
             if uid and cid:
-                tracker.mongodb.push_session_thought(
+                tracker.mongodb.push_chat_message(
                     uid, sid, cid,
-                    {"node": "TA_Teach_Finish", "thought": ta_out.summary, "status": "SUCCESS"}
+                    {"role": ta.name, "heading": "Teaching & Evaluating", "message": ta_out.summary}
                 )
-            await self._save_ta_memo(sid, tracker, ta_out)
+            await self._save_ta_memo(sid, cid, tracker, ta_out)
             tracker.save_state(sid)
 
         asyncio.create_task(_bg_teach(ta_output, chat_id))
@@ -414,7 +404,7 @@ class SmartEdu:
         if not proposal:
             msg = "Không có đề xuất nào đang chờ xác nhận."
             ta_output = TAOutput(summary="No pending proposal", message=msg)
-            await self._save_ta_memo(sid, tracker, ta_output)
+            await self._save_ta_memo(sid, chat_id, tracker, ta_output)
             return {"messages": [AIMessage(content=msg)]}
 
         tracker.apply_proposal(sid, proposal)
@@ -449,7 +439,7 @@ class SmartEdu:
                 output=msg,
             )
 
-        await self._save_ta_memo(sid, tracker, ta_output)
+        await self._save_ta_memo(sid, chat_id, tracker, ta_output)
         tracker.save_state(sid)
 
         return {"messages": [AIMessage(content=ta_output.message)], "pending_proposal": None}
@@ -505,26 +495,38 @@ class SmartEdu:
             )
 
         # --- Background: memoize & persist (non-blocking) ---
-        asyncio.create_task(self._bg_save(sid, tracker, ta_output))
+        asyncio.create_task(self._bg_save(sid, chat_id, tracker, ta_output))
 
         return {"messages": [AIMessage(content=ta_output.message)], "pending_proposal": None}
 
 
 
     @staticmethod
-    async def _save_ta_memo(session_id: str, tracker, ta_output: TAOutput):
+    async def _save_ta_memo(session_id: str, chat_id: str, tracker, ta_output: TAOutput):
         """Standard memo save for all finish nodes — uses TAOutput."""
         session = tracker.get_session(session_id)
         session.student_state["summary"] = ta_output.summary
-        await session.memo.save({
+        
+        # Append to DB directly
+        msg = {
             "role": "TA",
             "heading": ta_output.summary,
             "message": ta_output.message,
-        })
+        }
+        tracker.mongodb.push_chat_message(session.student_id, session_id, chat_id, msg)
+        
+        # Optional: append to in-memory memo if needed, but not required if get_chat_history uses DB.
+        # Since get_chat_history uses self.session.chats in memo, we should append in memory too.
+        for chat in session.memo.session.chats:
+            if chat.id == chat_id:
+                from student.memo import ChatMessage
+                import datetime
+                chat.messages.append(ChatMessage(**msg, timestamp=datetime.datetime.utcnow().isoformat()))
+                break
 
-    async def _bg_save(self, session_id: str, tracker, ta_output: TAOutput):
+    async def _bg_save(self, session_id: str, chat_id: str, tracker, ta_output: TAOutput):
         """Background-safe save: memo + student state persistence."""
-        await self._save_ta_memo(session_id, tracker, ta_output)
+        await self._save_ta_memo(session_id, chat_id, tracker, ta_output)
         tracker.save_state(session_id)
 
     async def execute(

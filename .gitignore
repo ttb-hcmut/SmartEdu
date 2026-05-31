@@ -41,3 +41,10 @@ docs/*
 
 scratch/
 capstone/data
+
+
+
+*.md
+
+!README.md
+!arch.md

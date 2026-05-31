@@ -1,4 +1,4 @@
-from TA.edu.workflow.schema import RAGCore, RAGDeep, RoadmapExplore, TeachLectureOutput
+from TA.edu.helper.schema import RAGCore, RAGDeep, RoadmapExplore, TeachLectureOutput
 from core.schema.wf_state import TAOutput
 
 AGENT_SPECS = {

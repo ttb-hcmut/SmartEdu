@@ -2,15 +2,22 @@
 from typing import List, Dict
 import os
 import uuid
+import tempfile
 from time import time
 import re
 import asyncio
+
+try:
+    import fitz  # PyMuPDF — slice pdfs into small page pieces
+except ImportError:
+    fitz = None
 
 # Logic
 from core.schema.graph.graph import KG_Instance
 from core.util.file_extractor import extract_pdf
 from core.repo.graph.insert import serialize_kg_to_dict
 from core.schema.graph.type import Ref
+from core.repo.storage.minio_repo import make_topic_name
 from knowledge.engine.extract import GraphExtractionService
 from knowledge.engine.graph.graph_constructor import KG_Handler
 
@@ -46,91 +53,137 @@ class CourseIngestionService:
         self.extractor = GraphExtractionService(llm_engine=self.llm)
         self.embedder : Embedder = embedder
         self.db_name = DB_NAME
+        self.ocr_sem = asyncio.Semaphore(1)
 
         self.config = Ingest_param()
 
+    @staticmethod
+    def _slice_pages_pdf(doc, start_page: int, end_page: int) -> bytes:
+        # cut pages [start..end] (1-indexed, inclusive) into a new small pdf
+        sub = fitz.open()
+        sub.insert_pdf(doc, from_page=start_page - 1, to_page=end_page - 1)
+        data = sub.tobytes()
+        sub.close()
+        return data
+
     async def _process_slide(self, name: str, course_name, num_workers: int = 3):
+        # pull the raw pdf from minio staging (browser dropped it via presigned url)
+        raw_obj = self.minio_repo.raw_object_name(course_name, name)
+        file_bytes = await asyncio.to_thread(self.minio_repo.get_object_bytes, raw_obj)
 
-        file_path = self.config.path  + name
-        chunks: List[Dict[str, str]] = await asyncio.to_thread(
-            extract_pdf, file_path, pages_per_batch=self.config.PAGE_PER_SLIDE
-        )
-        
+        # docling wants a path: write bytes to temp, extract, then remove
+        tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        tmp.write(file_bytes)
+        tmp.close()
+        try:
+            async with self.ocr_sem:
+                chunks: List[Dict[str, str]] = await asyncio.to_thread(
+                    extract_pdf, tmp.name, pages_per_batch=self.config.PAGE_PER_SLIDE
+                )
+        finally:
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass
+
         if not chunks:
-            return
+            return None
 
-        with open(file_path, "rb") as f:
-            file_bytes = f.read()
-        
-        pdf_uri = self.minio_repo.upload_slide(name=name, 
-                                            course_name=course_name, 
-                                            file_data=file_bytes)
-        
-        extract_queue = asyncio.Queue(maxsize=10)
+        if fitz is None:
+            raise RuntimeError("PyMuPDF (fitz) not installed — cannot split page pdfs.")
+        # open the big pdf once so each chunk's page range can be sliced out
+        big_doc = fitz.open(stream=file_bytes, filetype="pdf")
+
+        q = asyncio.Queue(maxsize=10)
         hard_refs = []
         texts = []
 
         for i, c in enumerate(chunks):
             content = c.get('content', None)
-            if not content: continue 
+            if not content: continue
             content: str = clean_content(text=content)
-            
+
             heading = c.get('heading') or name
             texts.append((heading, content))
-            
-            storage_uri = self.minio_repo.upload_chunk(chunk_id=c.get("chunk_id"), content=c.get("content"), name=name, course_name=course_name)
+
+            # one unique topic folder per chunk
+            chunk_id = c.get("chunk_id")
+            topic = make_topic_name(file_name=name, heading=c.get("heading"), chunk_id=chunk_id)
+
+            # page_num is a (start, end) tuple from the extractor; slice that range
+            start_p, end_p = c["page_num"]
+            page_pdf = self._slice_pages_pdf(big_doc, start_p, end_p)
+            self.minio_repo.upload_topic_pdf(topic=topic, course_name=course_name, file_data=page_pdf)
+
+            uri = self.minio_repo.upload_chunk(
+                chunk_id=chunk_id, content=c.get("content"), topic=topic, course_name=course_name
+            )
 
             ref = Ref(
                 db="minio",
-                id=storage_uri,
+                id=uri,
                 name=clean_slide_name(heading),
                 summary=f"{content[:100]} ......".replace("\n", " "),
                 p_num=c["page_num"]
             )
             hard_refs.append(ref)
-            await extract_queue.put((i, heading, content, ref))
+            await q.put((i, heading, content, ref))
+
+        big_doc.close()
 
         if not texts:
-            return
-        
-        for _ in range(num_workers):
-            await extract_queue.put(None)
+            return None
 
-        self.extractor.kg_handler = KG_Handler()
-        
-        kg_instance: KG_Instance = await self.extractor.extract_pipeline(
-            extract_queue=extract_queue,
+        for _ in range(num_workers):
+            await q.put(None)
+
+        extractor = GraphExtractionService(llm_engine=self.llm)
+        extractor.kg_handler = KG_Handler()
+
+        kg: KG_Instance = await extractor.extract_pipeline(
+            extract_queue=q,
             course_name=course_name,
             num_workers=num_workers
         )
-        nodes, edges, clusters = serialize_kg_to_dict(kg_instance)
+        nodes, edges, clusters = serialize_kg_to_dict(kg)
+        return nodes, edges, clusters
 
-        self.graph_db.import_data(db_name=self.db_name, nodes=nodes, edges=edges, clusters= clusters)
-        self.milvus_db.insert_data(nodes=nodes, embedder=self.embedder)
 
-        
 
     async def _process_textbook(self,name: str, course_name, num_workers: int = 3):
-        file_path = self.config.path  + name
-        chunks = await asyncio.to_thread(
-            extract_pdf, file_path, pages_per_batch=self.config.PAGE_PER_TB
-        )
-        
+        # pull raw textbook from minio staging, temp-file for docling, then remove
+        raw_obj = self.minio_repo.raw_object_name(course_name, name)
+        file_bytes = await asyncio.to_thread(self.minio_repo.get_object_bytes, raw_obj)
+        tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        tmp.write(file_bytes)
+        tmp.close()
+        try:
+            chunks = await asyncio.to_thread(
+                extract_pdf, tmp.name, pages_per_batch=self.config.PAGE_PER_TB
+            )
+        finally:
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass
+
         sem = asyncio.Semaphore(num_workers)
-        
+
         async def _handle_chunk(chunk):
             async with sem:
                 text_content = chunk.get("content")
                 chunk_id = chunk.get("chunk_id")
                 heading = chunk.get("heading", "")
-                
+
                 if not text_content:
                     return
-                    
+
+                # textbook chunk gets its own topic folder (text only, no page.pdf)
+                topic = make_topic_name(file_name=name, heading=heading, chunk_id=chunk_id)
                 storage_uri = self.minio_repo.upload_chunk(
-                    chunk_id=chunk_id, 
-                    content=text_content, 
-                    name=name, 
+                    chunk_id=chunk_id,
+                    content=text_content,
+                    topic=topic,
                     course_name=course_name
                 )
                 search_query = f"{heading}: {text_content}"
@@ -159,38 +212,43 @@ class CourseIngestionService:
         start = time()
         if req.reset:
             self.reset_db()
-        for slide_file in req.slide_files:
-            await self._process_slide(slide_file, req.course_name)
-            
-        for textbook_file in req.textbook_files:
-            await self._process_textbook(textbook_file, req.course_name)
+
+        results = await asyncio.gather(*[
+            self._process_slide(f, req.course_name) for f in req.slide_files
+        ])
+
+        for res in results:
+            if res is None:
+                continue
+            nodes, edges, clusters = res
+            self.graph_db.import_data(db_name=self.db_name, nodes=nodes, edges=edges, clusters=clusters)
+            self.milvus_db.insert_data(nodes=nodes, embedder=self.embedder)
+
+        await asyncio.gather(*[
+            self._process_textbook(f, req.course_name) for f in req.textbook_files
+        ])
+
         print(f" ====>  All finished and takes {time()-start}")
 
-    def validate_files(self, names: List[str]):
+    def validate_files(self, course_name: str, names: List[str]):
  
         if not names:
             raise HTTPException(status_code=400, detail="File list is empty.")
 
         for name in names:
-            file_path = self.config.path  + name
-            if not os.path.exists(file_path):
+            # extension check
+            if not name.lower().endswith('.pdf'):
                 raise HTTPException(
-                    status_code=404, 
-                    detail=f"File not found: {file_path}"
+                    status_code=400,
+                    detail=f"Unsupported file type: {name}. Only PDF is allowed."
                 )
-            
-            # 2. Check extension
-            if not file_path.lower().endswith('.pdf'):
+
+            # presence check (object must already exist via presigned PUT)
+            raw_obj = self.minio_repo.raw_object_name(course_name, name)
+            if not self.minio_repo.object_exists(raw_obj):
                 raise HTTPException(
-                    status_code=400, 
-                    detail=f"Unsupported file type: {file_path}. Only PDF is allowed."
-                )
-            
-            # 3. Check file size (Optional - e.g., max 50MB)
-            if os.path.getsize(file_path) > 50 * 1024 * 1024:
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"File too large: {file_path}. Max size is 50MB."
+                    status_code=404,
+                    detail=f"File not uploaded to storage: {name}. PUT it via the presigned URL first."
                 )
         
         return True

@@ -19,6 +19,7 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../core/.env"))
 _SECRET_KEY: str = os.getenv("JWT_SECRET", "CHANGE_ME_IN_PRODUCTION99292ee29e2923iu3uibfui3bfiu")
 _ALGORITHM = "HS256"
 _ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
+_REFRESH_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "120"))  # long-lived, cookie-only
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/student/login")
 
@@ -28,6 +29,7 @@ class User(BaseModel):
     username: str
     name: Optional[str] = None
     email: Optional[str] = None
+    is_admin: bool = False  # admin flag, sourced from sql row
 
 
 def create_access_token(student_id: str, extra: Optional[dict] = None) -> str:
@@ -43,6 +45,33 @@ def create_access_token(student_id: str, extra: Optional[dict] = None) -> str:
         
     encoded_jwt = jwt.encode(payload, _SECRET_KEY, algorithm=_ALGORITHM)
     return encoded_jwt
+
+
+def create_refresh_token(student_id: str) -> str:
+    """Mint a long-lived refresh token (lives in httpOnly cookie, only mints access tokens)."""
+    exp = datetime.now(timezone.utc) + timedelta(minutes=_REFRESH_TOKEN_EXPIRE_MINUTES)
+    payload = {"sub": student_id, "type": "refresh", "exp": exp}
+    return jwt.encode(payload, _SECRET_KEY, algorithm=_ALGORITHM)
+
+
+def decode_refresh_token(token: str) -> str:
+    """Validate a refresh token, return the student_id."""
+    exc = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired refresh token.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, _SECRET_KEY, algorithms=[_ALGORITHM])
+        # reject access tokens here, only refresh kind allowed
+        if payload.get("type") != "refresh":
+            raise exc
+        student_id = payload.get("sub")
+        if not student_id:
+            raise exc
+        return str(student_id)
+    except jwt.InvalidTokenError:
+        raise exc
 
 
 def get_current_student(request: Request, token: str = Depends(oauth2_scheme)) -> User:
@@ -76,5 +105,15 @@ def get_current_student(request: Request, token: str = Depends(oauth2_scheme)) -
     student_profile = sql.get_student_by_id(student_id)
     if not student_profile:
         raise credentials_exc
-        
+
     return User(**student_profile)
+
+
+def require_admin(current: User = Depends(get_current_student)) -> User:
+    """Block non-admins (403)."""
+    if not current.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required.",
+        )
+    return current

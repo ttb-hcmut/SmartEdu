@@ -209,13 +209,14 @@ class Student_Tracker:
 
         # 2. Lấy hoặc tạo session-specific object
         if session_id not in self._sessions:
-            history = self.mongodb.get_recent_history(student_id, 5, session_id)
+            session_data = self.mongodb.get_session_data(student_id, session_id)
+            if not session_data:
+                self.mongodb.create_session(student_id, session_id)
+                session_data = self.mongodb.get_session_data(student_id, session_id)
+
             memo = Memo(
-                session_history=history,
                 session_id=session_id,
-                save_callback=lambda entry, sid: self.mongodb.push_to_history(
-                    student_id, entry, sid
-                ),
+                session_data=session_data
             )
             # Load persisted SessionContext, or create fresh
             ctx_data = self.mongodb.get_session_context(student_id, session_id)

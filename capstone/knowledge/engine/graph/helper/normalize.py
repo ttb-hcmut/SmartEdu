@@ -9,7 +9,10 @@ import re
 USER_AGENT = "EduCapstoneBot/1.0 (dev_mode@student.edu)"
 API_URL = "https://www.wikidata.org/w/api.php"
 LIMIT = 10
-SUBJECT_FILE = "subjects.csv"
+
+# Resolve subjects.csv path relative to this file
+_self_dir = os.path.dirname(os.path.abspath(__file__))
+SUBJECT_FILE = os.path.abspath(os.path.join(_self_dir, "..", "..", "subjects.csv"))
 
 # --- 1. SETUP SPACY & STOPWORDS ---
 try:
@@ -30,27 +33,39 @@ GENERIC_ADJECTIVES = {
 
 # --- 2. UTILS ---
 if not os.path.exists(SUBJECT_FILE):
+    os.makedirs(os.path.dirname(SUBJECT_FILE), exist_ok=True)
     with open(SUBJECT_FILE, "w", encoding="utf-8") as f:
         defaults = [
-            "programming", "software", "algorithm", "computer", "science", 
-            "mathematics", "university", "technology", "framework", "library",
-            "education", "intelligence", "learning", "data", "system", "city",
-            "field", "discipline", "branch", "concept", "method", "term"
+            "programming,1.0", "software,1.0", "algorithm,1.0", "computer,1.0", "science,1.0", 
+            "mathematics,1.0", "university,1.0", "technology,1.0", "framework,1.0", "library,1.0",
+            "education,1.0", "intelligence,1.0", "learning,1.0", "data,1.0", "system,0.5", "city,0.5",
+            "field,0.5", "discipline,0.5", "branch,0.5", "concept,0.5", "method,0.5", "term,0.5"
         ]
         f.write("\n".join(defaults))
 
 def load_filter_scores(filepath):
     scores = {}
-    generic_words = {"system", "city", "field", "concept", "term", "method", "branch", "discipline"}
     try:
         with open(filepath, "r", encoding="utf-8") as f:
             for line in f:
-                clean = line.strip().lower()
-                if clean:
-                    if clean in generic_words:
-                        scores[clean] = 0.5
-                    else:
-                        scores[clean] = 1.0
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "," in line:
+                    parts = line.split(",", 1)
+                    word = parts[0].strip().lower()
+                    if word in ("word", "keyword", "subject", "term"):
+                        continue
+                    try:
+                        score = float(parts[1].strip())
+                    except ValueError:
+                        score = 1.0
+                else:
+                    word = line.lower()
+                    score = 1.0
+                
+                if word:
+                    scores[word] = score
     except Exception:
         pass
     return scores

@@ -46,7 +46,9 @@ def edge_type(s: EduNode, t: EduNode):
 
 
 
-SUBJECT_FILE = "subjects.csv"
+import os
+_self_dir = os.path.dirname(os.path.abspath(__file__))
+SUBJECT_FILE = os.path.abspath(os.path.join(_self_dir, "..", "..", "subjects.csv"))
 nlp = spacy.load("en_core_web_sm", disable=["parser", "ner"])
 from collections import Counter
 

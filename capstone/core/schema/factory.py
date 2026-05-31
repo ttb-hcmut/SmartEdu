@@ -21,6 +21,7 @@ class RelationEdge(BaseModel):
     rel: str = Field(default=..., description="Detailed relationship between source and target explain. ")
     name: Literal[
         "INCLUDES",
+        "PART_OF",
         "PREREQUISITE",
         "CAUSES",
         "RELATED_TO",

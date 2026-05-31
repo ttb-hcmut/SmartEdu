@@ -4,10 +4,11 @@ from langgraph.graph import StateGraph, END
 from langchain_core.runnables import RunnableConfig
 
 from core.schema.wf_state import AgentState
-from TA.edu.workflow.schema import RoadmapExplore, RoadmapCritique, RoadmapFinal
-from TA.edu.workflow.prompt import ROADMAP_PROMPT
-from TA.edu.workflow.few_shot import get_language_instruction
-from TA.edu.utils import filter_mastery, safe_parse_structured, extract_llm_raw_text
+from TA.edu.helper.schema import RoadmapExplore, RoadmapCritique, RoadmapFinal
+from TA.edu.helper.prompt import ROADMAP_PROMPT
+from TA.edu.helper.few_shot import get_language_instruction
+from TA.edu.helper.utils import filter_mastery, safe_parse_structured, extract_llm_raw_text
+from TA.edu.helper.context import extract_ta_context
 
 
 from TA.tracing.tracer import AgentTracer
@@ -177,7 +178,7 @@ async def ta_advice_logic(state: AgentState, ta_agent, config: RunnableConfig):
     )
 
     ## -- Inject prior TA messages for coherence (TA model only)
-    ta_context = _extract_ta_context(state)
+    ta_context = extract_ta_context(state)
     if ta_context:
         instruction = f"[Prior TA reasoning]:\n{ta_context}\n\n{instruction}"
 
@@ -207,17 +208,3 @@ async def ta_advice_logic(state: AgentState, ta_agent, config: RunnableConfig):
         "messages": [{"role": "assistant", "content": advice.ai_message}],
         "status_flag": "SUCCESS",
     }
-
-
-def _extract_ta_context(state: AgentState, max_msgs: int = 2) -> str:
-    """ Extract last N assistant messages from state for TA context injection"""
-    messages = state.get("messages", [])
-    ta_msgs = []
-    for msg in reversed(messages):
-        if hasattr(msg, "type") and msg.type == "ai":
-            ta_msgs.append(msg.content)
-        elif isinstance(msg, dict) and msg.get("role") == "assistant":
-            ta_msgs.append(msg["content"])
-        if len(ta_msgs) >= max_msgs:
-            break
-    return "\n---\n".join(reversed(ta_msgs))

@@ -1,0 +1,252 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ─────────────────────────────────────────────────────────────
+   SmartEdu — OKLCH design token system
+   Brand: amber anchor · electric-blue accent · flat elevation
+   Structural vocabulary: Cohere 2026 (radius scale, editorial restraint)
+   ───────────────────────────────────────────────────────────── */
+
+@theme inline {
+  /* shadcn semantic token map → Tailwind utilities */
+  --color-background:                    var(--background);
+  --color-foreground:                    var(--foreground);
+  --color-card:                          var(--card);
+  --color-card-foreground:               var(--card-foreground);
+  --color-popover:                       var(--popover);
+  --color-popover-foreground:            var(--popover-foreground);
+  --color-primary:                       var(--primary);
+  --color-primary-foreground:            var(--primary-foreground);
+  --color-secondary:                     var(--secondary);
+  --color-secondary-foreground:          var(--secondary-foreground);
+  --color-muted:                         var(--muted);
+  --color-muted-foreground:              var(--muted-foreground);
+  --color-accent:                        var(--accent);
+  --color-accent-foreground:             var(--accent-foreground);
+  --color-destructive:                   var(--destructive);
+  --color-destructive-foreground:        var(--destructive-foreground);
+  --color-border:                        var(--border);
+  --color-input:                         var(--input);
+  --color-ring:                          var(--ring);
+  --color-sidebar:                       var(--sidebar);
+  --color-sidebar-foreground:            var(--sidebar-foreground);
+  --color-sidebar-primary:               var(--sidebar-primary);
+  --color-sidebar-primary-foreground:    var(--sidebar-primary-foreground);
+  --color-sidebar-accent:                var(--sidebar-accent);
+  --color-sidebar-accent-foreground:     var(--sidebar-accent-foreground);
+  --color-sidebar-border:                var(--sidebar-border);
+  --color-sidebar-ring:                  var(--sidebar-ring);
+
+  /* SmartEdu custom color utilities */
+  --color-surface:          var(--surface);
+  --color-surface-2:        var(--surface-2);
+  --color-ink:              var(--ink);
+  --color-ink-muted:        var(--ink-muted);
+  --color-se-primary:       var(--se-primary);
+  --color-se-accent:        var(--se-accent);
+  --color-se-accent-subtle: var(--se-accent-subtle);
+  --color-error:            var(--error);
+  --color-success:          var(--success);
+  --color-warning:          var(--warning);
+
+  /* Radius scale — Cohere exact values */
+  --radius-xs:   var(--r-xs);
+  --radius-sm:   var(--r-sm);
+  --radius-md:   var(--r-md);
+  --radius-lg:   var(--r-lg);
+  --radius-xl:   var(--r-xl);
+  --radius-pill: var(--r-pill);
+  --radius-full: var(--r-full);
+
+  /* Typography */
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+}
+
+/* ── Light mode ─────────────────────────────────────────────── */
+:root {
+  /* ── SmartEdu brand layer ── */
+  --bg:                oklch(1.000 0.000   0);
+  --surface:           oklch(0.972 0.008  43);
+  --surface-2:         oklch(0.948 0.014  43);
+  --ink:               oklch(0.160 0.018  43);
+  --ink-muted:         oklch(0.460 0.016  43);
+  --se-primary:        oklch(0.520 0.185  43.2);
+  --se-primary-hover:  oklch(0.460 0.185  43.2);
+  --se-accent:         oklch(0.420 0.160 248);
+  --se-accent-btn:     oklch(0.420 0.160 248);
+  --se-accent-subtle:  oklch(0.940 0.040 248);
+  --se-border:         oklch(0.880 0.010  43);
+  --success:           oklch(0.450 0.150 142);
+  --error:             oklch(0.400 0.180  20);
+  --warning:           oklch(0.500 0.180  65);
+
+  /* ── Radius scale (Cohere exact) ── */
+  --r-xs:   4px;
+  --r-sm:   8px;
+  --r-md:   16px;
+  --r-lg:   22px;
+  --r-xl:   30px;
+  --r-pill: 32px;
+  --r-full: 9999px;
+
+  /* ── shadcn semantic tokens → SmartEdu values ── */
+  --background:            oklch(1.000 0.000   0);
+  --foreground:            oklch(0.160 0.018  43);
+  --card:                  oklch(0.972 0.008  43);
+  --card-foreground:       oklch(0.160 0.018  43);
+  --popover:               oklch(0.948 0.014  43);
+  --popover-foreground:    oklch(0.160 0.018  43);
+  --primary:               oklch(0.520 0.185  43.2);
+  --primary-foreground:    oklch(1.000 0.000   0);
+  --secondary:             oklch(0.972 0.008  43);
+  --secondary-foreground:  oklch(0.160 0.018  43);
+  --muted:                 oklch(0.972 0.008  43);
+  --muted-foreground:      oklch(0.460 0.016  43);
+  --accent:                oklch(0.940 0.040 248);
+  --accent-foreground:     oklch(0.160 0.018  43);
+  --destructive:           oklch(0.400 0.180  20);
+  --destructive-foreground: oklch(1.000 0.000  0);
+  --border:                oklch(0.880 0.010  43);
+  --input:                 oklch(0.880 0.010  43);
+  --ring:                  oklch(0.420 0.160 248);
+  --radius:                8px;
+
+  /* ── Sidebar tokens ── */
+  --sidebar:                    oklch(0.948 0.014  43);
+  --sidebar-foreground:         oklch(0.160 0.018  43);
+  --sidebar-primary:            oklch(0.520 0.185  43.2);
+  --sidebar-primary-foreground: oklch(1.000 0.000   0);
+  --sidebar-accent:             oklch(0.940 0.040 248);
+  --sidebar-accent-foreground:  oklch(0.160 0.018  43);
+  --sidebar-border:             oklch(0.880 0.010  43);
+  --sidebar-ring:               oklch(0.420 0.160 248);
+}
+
+/* ── Dark mode ──────────────────────────────────────────────── */
+.dark {
+  /* ── SmartEdu brand layer ── */
+  --bg:                oklch(0.085 0.000   0);
+  --surface:           oklch(0.130 0.012 248);
+  --surface-2:         oklch(0.175 0.016 248);
+  --ink:               oklch(0.910 0.008 248);
+  --ink-muted:         oklch(0.550 0.020 248);
+  --se-primary:        oklch(0.720 0.185  43.2);
+  --se-primary-hover:  oklch(0.660 0.185  43.2);
+  --se-accent:         oklch(0.720 0.220 248);
+  --se-accent-btn:     oklch(0.420 0.220 248);
+  --se-accent-subtle:  oklch(0.180 0.100 248);
+  --se-border:         oklch(0.240 0.020 248);
+  --success:           oklch(0.580 0.160 142);
+  --error:             oklch(0.640 0.200  20);
+  --warning:           oklch(0.680 0.180  65);
+
+  /* ── shadcn semantic tokens → dark SmartEdu values ── */
+  --background:            oklch(0.085 0.000   0);
+  --foreground:            oklch(0.910 0.008 248);
+  --card:                  oklch(0.130 0.012 248);
+  --card-foreground:       oklch(0.910 0.008 248);
+  --popover:               oklch(0.175 0.016 248);
+  --popover-foreground:    oklch(0.910 0.008 248);
+  --primary:               oklch(0.720 0.185  43.2);
+  --primary-foreground:    oklch(0.085 0.000   0);
+  --secondary:             oklch(0.130 0.012 248);
+  --secondary-foreground:  oklch(0.910 0.008 248);
+  --muted:                 oklch(0.130 0.012 248);
+  --muted-foreground:      oklch(0.550 0.020 248);
+  --accent:                oklch(0.180 0.100 248);
+  --accent-foreground:     oklch(0.910 0.008 248);
+  --destructive:           oklch(0.640 0.200  20);
+  --destructive-foreground: oklch(0.085 0.000  0);
+  --border:                oklch(0.240 0.020 248);
+  --input:                 oklch(0.240 0.020 248);
+  --ring:                  oklch(0.720 0.220 248);
+
+  /* ── Sidebar tokens (dark) ── */
+  --sidebar:                    oklch(0.130 0.012 248);
+  --sidebar-foreground:         oklch(0.910 0.008 248);
+  --sidebar-primary:            oklch(0.720 0.185  43.2);
+  --sidebar-primary-foreground: oklch(0.085 0.000   0);
+  --sidebar-accent:             oklch(0.180 0.100 248);
+  --sidebar-accent-foreground:  oklch(0.910 0.008 248);
+  --sidebar-border:             oklch(0.240 0.020 248);
+  --sidebar-ring:               oklch(0.720 0.220 248);
+}
+
+/* ── Base styles ─────────────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    background-color: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    @apply bg-background text-foreground;
+    min-height: 100dvh;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+  p, li {
+    text-wrap: pretty;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--r-xs);
+  }
+}
+
+/* ── Reduced motion ──────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Keyframes ───────────────────────────────────────────────── */
+@keyframes msg-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes thought-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.85); }
+}
+
+@keyframes shimmer {
+  from { background-position: -200% center; }
+  to   { background-position:  200% center; }
+}
+
+/* ── Animation utility classes ───────────────────────────────── */
+.msg-enter {
+  animation: msg-enter 120ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.thought-pulse {
+  animation: thought-pulse 1.6s ease-in-out infinite;
+}
+
+.pdf-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--surface)   25%,
+    var(--surface-2) 50%,
+    var(--surface)   75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}

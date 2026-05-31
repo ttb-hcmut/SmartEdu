@@ -1,59 +1,51 @@
-from dataclasses import dataclass, field
-from typing import Any, Callable, List, Dict
+from typing import List, Dict, Any, Optional, Callable
+from pydantic import BaseModel, Field
+from datetime import datetime
+import time
+import os
+from uuid_v7.base import uuid7
 
+def generate_uuidv7() -> str:
+    return str(uuid7())
 
+class ChatMessage(BaseModel):
+    role: str
+    heading: str
+    message: str
+    timestamp: str
 
-@dataclass
+class Chat(BaseModel):
+    id: str = Field(default_factory=generate_uuidv7)
+    invoke: str = ""
+    messages: List[ChatMessage] = Field(default_factory=list)
+
+class Session(BaseModel):
+    id: str = Field(default_factory=generate_uuidv7)
+    name: str = "New Session"
+    chats: List[Chat] = Field(default_factory=list)
+
 class Memo:
-    state_key: str = "memo"
-    history_len: int = 5 
-    session_history: List[Dict] = field(default_factory=list) 
-    save_callback: Callable = None
-    session_id: str = "default"
-
-    async def save(self, entry: Dict) -> None:
-        message = entry.get("message", "")
-        heading = entry.get("heading", "")
-        if not message or not heading:
-            return
-            
-        self.session_history.append(entry)
-        if len(self.session_history) > self.history_len:
-            self.session_history.pop(0) 
-        
-        if self.save_callback:
-            self.save_callback(entry, self.session_id)
+    def __init__(self, session_id: str, session_data: Optional[Dict] = None, save_callback: Optional[Callable] = None):
+        self.session_id = session_id
+        self.save_callback = save_callback
+        if session_data:
+            self.session = Session(**session_data)
+        else:
+            self.session = Session(id=session_id)
 
     def get_formatted_history(self, mode: str = "full") -> str:
-        if not self.session_history:
+        if not self.session.chats:
             return "No prior context."
             
         formatted_lines = []
-        if mode == "skim":
-            last_ta_idx = -1
-            for i, entry in enumerate(self.session_history):
-                if entry.get("role") != "student":
-                    last_ta_idx = i
-                    
-            for idx, entry in enumerate(self.session_history, 1):
-                role = entry.get("role", "unknown")
-                if role == "student":
-                    message = entry.get("message", "N/A")
-                    formatted_lines.append(f"[{idx}] Student: {message}")
-                elif (idx - 1) == last_ta_idx:
-                    heading = entry.get("heading", "")
-                    formatted_lines.append(f"[{idx}] TA: {heading}")
-        else:
-            for idx, entry in enumerate(self.session_history, 1):
-                role = entry.get("role", "unknown")
-                message = entry.get("message", "N/A")
-                heading = entry.get("heading", "")
-                
-                if role == "student":
-                    formatted_lines.append(f"[{idx}] Student: {message}")
-                else:
-                    formatted_lines.append(f"[{idx}] TA: {heading}")
-            
+        for chat in self.session.chats:
+            for msg in chat.messages:
+                if msg.role == "student":
+                    formatted_lines.append(f"Student: {msg.message}")
+                elif msg.role == "TA":
+                    if mode == "skim":
+                        formatted_lines.append(f"TA: {msg.heading}")
+                    else:
+                        formatted_lines.append(f"TA: {msg.message}")
+                        
         return "\n".join(formatted_lines)
-
-

@@ -2,10 +2,11 @@ import json
 import logging
 from langgraph.graph import StateGraph, END
 from core.schema.wf_state import AgentState, ConceptNode
-from TA.edu.workflow.schema import TeachEvalOutput, TeachLectureOutput, NextTopicOutput
-import TA.edu.workflow.prompt as prompt_lib
-from TA.edu.workflow.few_shot import get_language_instruction
-from TA.edu.utils import safe_parse_structured, extract_llm_raw_text
+from TA.edu.helper.schema import TeachEvalOutput, TeachLectureOutput, NextTopicOutput
+import TA.edu.helper.prompt as prompt_lib
+from TA.edu.helper.few_shot import get_language_instruction
+from TA.edu.helper.utils import safe_parse_structured, extract_llm_raw_text
+from TA.edu.helper.context import extract_ta_context
 import os
 from TA.tracing.tracer import AgentTracer
 
@@ -358,7 +359,7 @@ async def teach_lecture(state: AgentState, ta_agent, config):
         )
 
     ## -- Inject prior TA messages for coherence
-    ta_context = _extract_ta_context(state)
+    ta_context = extract_ta_context(state)
     if ta_context:
         prompt = f"[Prior TA reasoning]:\n{ta_context}\n\n{prompt}"
 
@@ -573,17 +574,3 @@ def _get_recommendations(graphdb, current_node) -> str:
             f"| connections: {r.get('out_degree', 0)} | {desc}"
         )
     return "\n".join(lines)
-
-
-def _extract_ta_context(state: AgentState, max_msgs: int = 3) -> str:
-    """ Extract last N assistant messages from state for TA context injection"""
-    messages = state.get("messages", [])
-    ta_msgs = []
-    for msg in reversed(messages):
-        if hasattr(msg, "type") and msg.type == "ai":
-            ta_msgs.append(msg.content)
-        elif isinstance(msg, dict) and msg.get("role") == "assistant":
-            ta_msgs.append(msg["content"])
-        if len(ta_msgs) >= max_msgs:
-            break
-    return "\n---\n".join(reversed(ta_msgs))

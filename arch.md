@@ -1,118 +1,270 @@
 ```
-└── capstone
-    ├── arch.md
-    ├── core
-    │   ├── api
-    │   │   └── life_span.py
-    │   ├── config.py
-    │   ├── dependencies.py
-    │   ├── llm
+└── Capstone
+    ├── arch.md # This file
+    ├── capstone
+    │   ├── core
+    │   │   ├── api
+    │   │   │   └── life_span.py
     │   │   ├── config.py
-    │   │   ├── llm_engine.py
-    │   │   └── prompt
-    │   │       ├── agents.py
-    │   │       └── graph.py
-    │   ├── model
-    │   │   └── embedding.py
-    │   ├── repo
-    │   │   ├── docker-compose.yaml
-    │   │   ├── graph
-    │   │   │   ├── graphdb.py
-    │   │   │   ├── insert.py
-    │   │   │   ├── neo4j.yaml
-    │   │   │   └── utils
-    │   │   ├── milvus_db
-    │   │   │   ├── etcd_data
-    │   │   │   ├── mil.py
-    │   │   │   └── milvus.yml
-    │   │   ├── nosql
-    │   │   │   ├── mongo_db.py
-    │   │   │   └── mongo.yml
-    │   │   ├── sql
-    │   │   │   ├── mysql.yml
-    │   │   │   ├── sql_db.py
-    │   │   │   └── student.db
-    │   │   ├── storage
-    │   │   │   └── minio_repo.py
+    │   │   ├── dependencies.py
+    │   │   ├── llm
+    │   │   │   ├── config.py
+    │   │   │   ├── llm_engine.py
+    │   │   │   └── prompt
+    │   │   │       ├── agents.py
+    │   │   │       └── graph.py
+    │   │   ├── model
+    │   │   │   └── embedding.py
+    │   │   ├── repo
+    │   │   │   ├── docker-compose.yaml
+    │   │   │   ├── graph
+    │   │   │   │   ├── graphdb.py
+    │   │   │   │   ├── insert.py
+    │   │   │   │   ├── neo4j.yaml
+    │   │   │   │   └── utils
+    │   │   │   ├── milvus_db
+    │   │   │   │   ├── etcd_data
+    │   │   │   │   ├── mil.py
+    │   │   │   │   └── milvus.yml
+    │   │   │   ├── nosql
+    │   │   │   │   ├── mongo_db.py
+    │   │   │   │   └── mongo.yml
+    │   │   │   ├── sql
+    │   │   │   │   ├── mysql.yml
+    │   │   │   │   └── sql_db.py
+    │   │   │   ├── storage
+    │   │   │   │   └── minio_repo.py
+    │   │   │   └── util
+    │   │   │       ├── __init__.py
+    │   │   │       └── dbgate.yml
+    │   │   ├── schema
+    │   │   │   ├── factory.py
+    │   │   │   ├── graph
+    │   │   │   │   ├── __init__.py
+    │   │   │   │   ├── graph.py
+    │   │   │   │   ├── ontology.py
+    │   │   │   │   └── type.py
+    │   │   │   └── wf_state.py
     │   │   └── util
-    │   │       ├── __init__.py
-    │   │       └── dbgate.yml
-    │   ├── schema
-    │   │   ├── factory.py
-    │   │   ├── graph
+    │   │       └── file_extractor.py
+    │   ├── knowledge
+    │   │   ├── api
+    │   │   │   ├── health.py
+    │   │   │   └── route.py
+    │   │   ├── engine
     │   │   │   ├── __init__.py
-    │   │   │   ├── graph.py
-    │   │   │   ├── ontology.py
-    │   │   │   └── type.py
-    │   │   └── wf_state.py
-    │   └── util
-    │       └── file_extractor.py
-    ├── knowledge
-    │   ├── api
-    │   │   ├── health.py
-    │   │   └── route.py
-    │   ├── engine
-    │   │   ├── __init__.py
-    │   │   ├── extract.py
-    │   │   ├── graph
-    │   │   │   ├── graph_constructor.py
+    │   │   │   ├── extract.py
+    │   │   │   ├── graph
+    │   │   │   │   ├── graph_constructor.py
+    │   │   │   │   ├── helper
+    │   │   │   │   │   ├── analyzer.py
+    │   │   │   │   │   ├── normalize.py
+    │   │   │   │   │   └── taxonomy.py
+    │   │   │   │   ├── prompt.py
+    │   │   │   │   ├── template.html
+    │   │   │   │   └── visualize_kg.py
+    │   │   │   └── subjects.csv
+    │   │   ├── knowledge_construction_service.py
+    │   │   └── service
+    │   │       └── course_ingest.py
+    │   ├── main.py
+    │   ├── README.md
+    │   ├── run_test.py
+    │   ├── student
+    │   │   ├── api.py
+    │   │   ├── auth.py
+    │   │   ├── memo.py
+    │   │   ├── session_context.py
+    │   │   └── Student_Tracker.py
+    │   ├── subjects.csv
+    │   ├── TA
+    │   │   ├── agent
+    │   │   │   ├── base.py
+    │   │   │   ├── injector.py
+    │   │   │   ├── middleware.py
+    │   │   │   └── ollama_patch.py
+    │   │   ├── api
+    │   │   │   └── route.py
+    │   │   ├── edu
     │   │   │   ├── helper
-    │   │   │   │   ├── analyzer.py
-    │   │   │   │   ├── normalize.py
-    │   │   │   │   └── taxonomy.py
-    │   │   │   ├── prompt.py
-    │   │   │   ├── template.html
-    │   │   │   └── visualize_kg.py
-    │   │   └── subjects.csv
-    │   ├── knowledge_construction_service.py
-    │   └── service
-    │       └── course_ingest.py
-    ├── main.py
-    ├── README.md
-    ├── run_test.py
-    ├── student
-    │   ├── api.py
-    │   ├── auth.py
-    │   ├── memo.py
-    │   └── Student_Tracker.py
-    ├── subjects.csv
-    ├── TA
-    │   ├── agent
-    │   │   ├── injector.py
-    │   │   ├── middleware.py
-    │   │   └── ollama_patch.py
-    │   ├── api
-    │   │   └── route.py
-    │   ├── edu
-    │   │   ├── smart_edu.py
-    │   │   └── utils.py
-    │   │   └── workflow
-    │   │       ├── few_shot.py
-    │   │       ├── prompt.py
-    │   │       ├── retrieve.py
-    │   │       ├── roadmap.py
-    │   │       ├── schema.py
-    │   │       ├── sync_prompts.py
-    │   │       └── teach.py
-    │   ├── ta_module.py
-    │   ├── tools
-    │   │   ├── factory.py
-    │   │   ├── minio
-    │   │   │   └── pdf_tools.py
-    │   │   └── neo
+    │   │   │   │   ├── context.py
+    │   │   │   │   ├── few_shot.py
+    │   │   │   │   ├── prompt.py
+    │   │   │   │   ├── schema.py
+    │   │   │   │   ├── sync_prompts.py
+    │   │   │   │   └── utils.py
+    │   │   │   ├── smart_edu.py
+    │   │   │   └── workflow
+    │   │   │       ├── retrieve.py
+    │   │   │       ├── roadmap.py
+    │   │   │       └── teach.py
+    │   │   ├── ta_module.py
+    │   │   ├── tools
+    │   │   │   ├── context_tools.py
+    │   │   │   ├── factory.py
+    │   │   │   ├── minio
+    │   │   │   │   └── pdf_tools.py
+    │   │   │   ├── neo
+    │   │   │   │   ├── __init__.py
+    │   │   │   │   ├── base.py
+    │   │   │   │   ├── explore.py
+    │   │   │   │   ├── retriever.py
+    │   │   │   │   └── schema.py
+    │   │   │   └── student
+    │   │   │       └── base.py
+    │   │   └── tracing
     │   │       ├── __init__.py
-    │   │       ├── base.py
-    │   │       ├── explore.py
-    │   │       ├── retriever.py
-    │   │       └── schema.py
-    │   └── tracing
-    │       ├── __init__.py
-    │       ├── prompt_sync.py
-    │       ├── schema.py
-    │       ├── tracer.py
-    │       └── writer.py
-    ├── test_minio.py
-    └── test_mongo.py
+    │   │       ├── prompt_sync.py
+    │   │       ├── schema.py
+    │   │       ├── tracer.py
+    │   │       └── writer.py
+    │   ├── test_minio.py
+    │   └── test_mongo.py
+    ├── docs
+    │   ├── description
+    │   │   ├── implementation_plan.md
+    │   │   ├── README.md
+    │   │   └── walkthrough.md
+    │   ├── draw
+    │   │   └── Draw.excalidraw
+    │   ├── latex
+    │   │   ├── Contents
+    │   │   │   ├── 01_Introduction.tex
+    │   │   │   ├── 02_Fundamental extra.tex
+    │   │   │   ├── 02_Fundamental.tex
+    │   │   │   ├── 03_requirements.tex
+    │   │   │   ├── 04_Proposal.tex
+    │   │   │   ├── 05_System.tex
+    │   │   │   ├── 06_Experiments.tex
+    │   │   │   └── 07_Eval.tex
+    │   │   ├── Images
+    │   │   │   ├── ex
+    │   │   │   │   ├── ai_mess.png
+    │   │   │   │   ├── app_run.png
+    │   │   │   │   ├── asynch_ingest.png
+    │   │   │   │   ├── dbgate.png
+    │   │   │   │   ├── docker.png
+    │   │   │   │   ├── full_TA_output_1.png
+    │   │   │   │   ├── graph.png
+    │   │   │   │   ├── login.png
+    │   │   │   │   ├── neo.png
+    │   │   │   │   ├── node.png
+    │   │   │   │   ├── pedia_err.png
+    │   │   │   │   ├── recommend_ml.png
+    │   │   │   │   └── tool_mess.png
+    │   │   │   ├── fundamental
+    │   │   │   │   ├── agent.png
+    │   │   │   │   ├── bayes.png
+    │   │   │   │   ├── cloud_local_llm.png
+    │   │   │   │   ├── embedding.png
+    │   │   │   │   ├── lstm.png
+    │   │   │   │   ├── micro.png
+    │   │   │   │   ├── react.png
+    │   │   │   │   └── snn.png
+    │   │   │   ├── hcmut.png
+    │   │   │   ├── method
+    │   │   │   │   ├── adaptive_middleware.png
+    │   │   │   │   ├── agent_design.jpg
+    │   │   │   │   ├── agent_design.png
+    │   │   │   │   ├── full_pipe.png
+    │   │   │   │   ├── g_extract.png
+    │   │   │   │   ├── lang_mid.png
+    │   │   │   │   ├── node_create.png
+    │   │   │   │   └── pipeline.png
+    │   │   │   ├── relate
+    │   │   │   │   ├── dkg.png
+    │   │   │   │   ├── edc.png
+    │   │   │   │   ├── edukg.png
+    │   │   │   │   ├── graphrag hybrid.png
+    │   │   │   │   └── kggen.png
+    │   │   │   └── system
+    │   │   │       ├── AI
+    │   │   │       │   └── ollama.png
+    │   │   │       ├── backend
+    │   │   │       │   ├── fastapi.png
+    │   │   │       │   └── uv.png
+    │   │   │       ├── database
+    │   │   │       │   ├── mil.png
+    │   │   │       │   ├── mongodb.png
+    │   │   │       │   └── sqlite.png
+    │   │   │       ├── filestorage
+    │   │   │       │   └── minio.jpg
+    │   │   │       ├── frontend
+    │   │   │       │   └── react.png
+    │   │   │       ├── lang_mid_logo.png
+    │   │   │       ├── lang_mid.jpg
+    │   │   │       ├── langchain_node.png
+    │   │   │       └── S2666920X2500013X.bib
+    │   │   ├── Intro
+    │   │   │   ├── LoiCamDoan.tex
+    │   │   │   ├── LoiCamOn.tex
+    │   │   │   └── TomTat.tex
+    │   │   ├── main.pdf
+    │   │   ├── main.tex
+    │   │   ├── Outro
+    │   │   │   ├── citation-389497305.bib
+    │   │   │   ├── Image.tex
+    │   │   │   └── Supplement.tex
+    │   │   ├── References.bib
+    │   │   ├── script.sh
+    │   │   └── table
+    │   │       ├── chap2
+    │   │       │   ├── edu_sys.tex
+    │   │       │   └── frameworks.tex
+    │   │       ├── chap3
+    │   │       ├── chap4
+    │   │       │   ├── wf_1.tex
+    │   │       │   ├── wf_2.tex
+    │   │       │   ├── wf_3.tex
+    │   │       │   └── wf.tex
+    │   │       └── chap5
+    │   │           ├── config.tex
+    │   │           ├── ingestion.tex
+    │   │           ├── lifespan.tex
+    │   │           ├── llms.tex
+    │   │           ├── pipeline.tex
+    │   │           └── sys_arch.tex
+    │   ├── Ref
+    │   │   ├── AEMA_agentic_eval.pdf
+    │   │   ├── ai_4_CS50.pdf
+    │   │   ├── AI_in_Edu.pdf
+    │   │   ├── Course
+    │   │   │   ├── 1_Prerequisite Extraction.pdf
+    │   │   │   ├── 2_ LDA course extract.pdf
+    │   │   │   ├── 3_ LLM based Pre extraction.pdf
+    │   │   │   └── pre_summary.pdf
+    │   │   ├── KG
+    │   │   │   ├── Algo
+    │   │   │   │   ├── 1_reasoning_and_graph.pdf
+    │   │   │   │   ├── 2_KG_init.pdf
+    │   │   │   │   ├── DKG_Comm.pdf
+    │   │   │   │   └── Leiden for Comm.pdf
+    │   │   │   ├── EduKG
+    │   │   │   │   ├── eduKG.pdf
+    │   │   │   │   ├── EduKGPipeline.pdf
+    │   │   │   │   └── MeduKG.pdf
+    │   │   │   ├── KG_Oppo_challenges.pdf
+    │   │   │   └── KG_reasoning
+    │   │   │       ├── kg_guide4QA.pdf
+    │   │   │       └── KGQA.pdf
+    │   │   ├── llm_in_edu.pdf
+    │   │   ├── open_source_isue.pdf
+    │   │   ├── semantic_collapse.pdf
+    │   │   └── Technical
+    │   │       ├── 2411.18241v1.pdf
+    │   │       ├── ICRAAI26_SolyUpadtedv3.pdf.pdf
+    │   │       ├── LangGraph V1 Essentials.pdf
+    │   │       └── Qwen rep.pdf
+    │   └── slides
+    │       ├── Adaptive Agent System for Self-Learning and Course Navigation.pdf
+    │       └── Roadmap For EduAgent.pdf
+    ├── FE
+    ├── FE-task.md
+    ├── main.py
+    ├── pyproject.toml
+    ├── README.md
+    └── script.sh
+
 ```
 
 ---
@@ -125,7 +277,7 @@ The SmartEdu platform is structured into four primary modules, each serving a di
 2. **`knowledge`**: Implements the pipeline for course material ingestion. It extracts structured semantic concepts and taxonomical relationships from slides and textbooks to build the system's foundational Knowledge Graph.
 3. **`student`**: Manages user accounts, authentication (JWT), chat session lifecycles, and maintains an in-memory & persisted learning history including mastery levels, active progress, and recent navigation.
 4. **`TA`**: Orchestrates the multi-turn conversational LangGraph workflow. It hosts the Smart Tutor agents, query router, retrieval workflows (RAG), customized learning path generators (Roadmaps), and active tutoring stages.
-
+5. **`FE`**: Landing pages of the system, a Front End that sends request to backend. Technology used 
 ---
 
 ## Detailed Architecture

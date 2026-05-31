@@ -18,16 +18,26 @@ student document structure in 'students' collection:
         "summary": str,
         "pending_proposal": None
     },
-    "memo": {
-        "<session_id>": [
-            {
-                "role": "student" | "TA",
-                "heading": str,
-                "message": str,
-                "timestamp": datetime
-            }
-        ]
-    }
+    "memo": [
+        {
+            "id": "session_id",
+            "name": "Session Name",
+            "chats": [
+                {
+                    "id": "chat_id",
+                    "invoke": "student query",
+                    "messages": [
+                        {
+                            "role": "student" | (Agent name) |"TA",
+                            "heading": str,
+                            "message": str,
+                            "timestamp": str
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
 }
 """
 
@@ -44,6 +54,7 @@ class Mongo_DB:
         if not doc:
             self.students.insert_one({
                 "_id": student_id,
+                "language": "vn",  # default ui/tutor language
                 "state": {
                     "finished_communities": [],
                     "current_pos": None,
@@ -54,8 +65,20 @@ class Mongo_DB:
                     "summary": "Student just started",
                     "pending_proposal": None
                 },
-                "memo": {}
+                "memo": []
             })
+
+    def get_language(self, student_id: str) -> str:
+        # read saved language, default to vn
+        doc = self.students.find_one({"_id": student_id}, {"language": 1})
+        return (doc or {}).get("language", "vn")
+
+    def set_language(self, student_id: str, language: str):
+        # persist language preference
+        self.students.update_one(
+            {"_id": student_id},
+            {"$set": {"language": language}},
+        )
 
     def get_student_state(self, student_id: str) -> dict:
         doc = self.students.find_one({"_id": student_id}, {"state": 1})
@@ -81,25 +104,40 @@ class Mongo_DB:
         }
         self.learning_logs.insert_one(log_entry)
 
-    # Nested student object with state and memo
-    def push_to_history(self, student_id: str, entry: Dict[str, Any], session_id: str = "default"):
-        """Push a chat entry into the nested memo under the given session_id."""
-        entry_with_ts = {**entry, "timestamp": datetime.datetime.utcnow()}
+    def create_session(self, student_id: str, session_id: str, session_name: str = "New Session"):
         self.students.update_one(
-            {"_id": student_id},
-            {"$push": {f"memo.{session_id}": entry_with_ts}},
-            upsert=True
+            {"_id": student_id, "memo.id": {"$ne": session_id}},
+            {"$push": {"memo": {"id": session_id, "name": session_name, "chats": []}}}
         )
 
-    def get_recent_history(self, student_id: str, limit: int = 6, session_id: str = "default") -> List[Dict[str, Any]]:
-        """Get the most recent chat history entries from the nested memo."""
-        doc = self.students.find_one(
-            {"_id": student_id},
-            {f"memo.{session_id}": {"$slice": -limit}}
+    def create_chat(self, student_id: str, session_id: str, chat_id: str, invoke_msg: str):
+        initial_msg = {
+            "role": "student",
+            "heading": "Student Query",
+            "message": invoke_msg,
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }
+        self.students.update_one(
+            {"_id": student_id, "memo.id": session_id},
+            {"$push": {"memo.$.chats": {"id": chat_id, "invoke": invoke_msg, "messages": [initial_msg]}}}
         )
+
+    def push_chat_message(self, student_id: str, session_id: str, chat_id: str, entry: Dict[str, Any]):
+        entry_with_ts = {**entry, "timestamp": datetime.datetime.utcnow().isoformat()}
+        self.students.update_one(
+            {"_id": student_id},
+            {"$push": {"memo.$[s].chats.$[c].messages": entry_with_ts}},
+            array_filters=[{"s.id": session_id}, {"c.id": chat_id}]
+        )
+
+    def get_session_data(self, student_id: str, session_id: str) -> dict:
+        doc = self.students.find_one({"_id": student_id})
         if not doc or "memo" not in doc:
-            return []
-        return doc["memo"].get(session_id, [])
+            return {}
+        for session in doc.get("memo", []):
+            if session.get("id") == session_id:
+                return session
+        return {}
 
     def push_session_tool_result(
         self, student_id: str, session_id: str, chat_id: str, entry: dict

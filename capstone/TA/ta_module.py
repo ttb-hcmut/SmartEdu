@@ -1,6 +1,6 @@
 from TA.agent.injector import AgentInjector
 from TA.tools.factory import ToolFactory
-from TA.tools.context_tools import _current_session_context
+from TA.tools.context_tools import _current_session_context, _current_tracker
 from TA.edu.smart_edu import SmartEdu
 from TA.tracing import AgentTracer
 from langchain_core.messages import HumanMessage, SystemMessage, BaseMessage, AIMessage
@@ -47,12 +47,6 @@ class TAModule:
         student_id = self.student_tracker._resolve(session_id)
         session_context = session.context
 
-        await session.memo.save({
-            "role": "student",
-            "message": user_input,
-            "heading": user_input[:100] + "..." + user_input[-100:] if len(user_input) > 200 else user_input,
-        })
-
         history_str = session.memo.get_formatted_history()
         student_state = session.student_state
 
@@ -76,6 +70,7 @@ class TAModule:
 
         # Bug 2 fix: inject session_context via ContextVar (async-safe, picked up by context tools)
         _ctx_token = _current_session_context.set(session_context)
+        _tracker_token = _current_tracker.set(self.student_tracker)
         try:
             final_state = await self.engine.execute(
                 initial_state=initial_state,
@@ -90,6 +85,7 @@ class TAModule:
             )
         finally:
             _current_session_context.reset(_ctx_token)
+            _current_tracker.reset(_tracker_token)
 
         if final_state.get("status_flag") == "FAIL":
             error_msg = final_state.get("_error", "Unknown TA workflow error.")

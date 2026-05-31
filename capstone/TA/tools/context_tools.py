@@ -9,7 +9,7 @@ Session context is injected via Python ContextVar (concurrent-safe):
 """
 
 from contextvars import ContextVar
-from typing import Optional, Literal, Type
+from typing import Optional, Literal, Type, Any
 
 from pydantic import BaseModel, Field
 from langchain.tools import BaseTool
@@ -19,6 +19,10 @@ from student.session_context import SessionContext
 # ── Per-request session context (async-safe ContextVar) ───────────────────────
 _current_session_context: ContextVar[Optional[SessionContext]] = ContextVar(
     "current_session_context", default=None
+)
+
+_current_tracker: ContextVar[Optional[Any]] = ContextVar(
+    "current_tracker", default=None
 )
 
 _HARD_LIMIT = 5        # absolute max entries returned
@@ -132,3 +136,56 @@ class RecallThoughts(BaseTool):
 
     async def _arun(self, limit: int = 3) -> str:
         return self._run(limit=limit)
+
+
+class InspectChatHistoryInput(BaseModel):
+    chat_id: str = Field(..., description="The chat ID to inspect")
+
+
+class InspectChatHistory(BaseTool):
+    name: str = "inspect_chat_history"
+    description: str = (
+        "View the complete history of intermediate agent thoughts and steps for a specific chat_id. "
+        "Use this to deeply investigate the reasoning chain if needed."
+    )
+    args_schema: Type[BaseModel] = InspectChatHistoryInput
+
+    def _run(self, chat_id: str) -> str:
+        tracker = _current_tracker.get()
+        session_context = _current_session_context.get()
+        if not tracker or not session_context:
+            return "Error: Student Tracker or session context not available."
+            
+        # Use tracker to find the specific chat history
+        try:
+            student_id = tracker.get_student_id_by_session(session_context.session_id)
+            session_data = tracker.mongodb.get_session_data(student_id, session_context.session_id)
+        except Exception as e:
+            return f"Error accessing DB: {str(e)}"
+            
+        if not session_data:
+            return f"Error: Session {session_context.session_id} not found."
+            
+        chats = session_data.get("chats", [])
+        target_chat = next((c for c in chats if c.get("id") == chat_id), None)
+        
+        if not target_chat:
+            return f"Error: Chat {chat_id} not found in this session."
+            
+        messages = target_chat.get("messages", [])
+        if not messages:
+            return "No messages found in this chat."
+            
+        formatted_lines = []
+        for idx, msg in enumerate(messages, 1):
+            role = msg.get("role", "unknown")
+            heading = msg.get("heading", "")
+            message = msg.get("message", "")
+            ts = msg.get("timestamp", "")
+            formatted_lines.append(f"[{idx}] {role} ({ts}) - {heading}: {message}")
+            
+        return "\n".join(formatted_lines)
+
+    async def _arun(self, chat_id: str) -> str:
+        return self._run(chat_id=chat_id)
+
