@@ -14,19 +14,19 @@ router = APIRouter(tags=["Knowledge"])
 # ─────────────────────────────────────────────
 class CourseIngestionRequest(BaseModel):
     course_name: str = "Machine Learning"
-    slide_files: List[str]      # filenames already PUT into minio staging (course/_raw/...)
+    slide_files: List[str]                         # filenames already PUT into minio staging (course/_raw/...)
     textbook_files: List[str]
     reset: bool = True
 
 
 class UploadUrlRequest(BaseModel):
     course_name: str
-    file_names: List[str]       # files needing a presigned upload url
+    file_names: List[str]                # files needing a presigned upload url
 
 
 class PresignedTarget(BaseModel):
     file_name: str
-    url: str                    # browser PUTs raw pdf bytes straight here
+    url: str                              # browser PUTs raw pdf bytes straight here
 
 
 class UploadUrlResponse(BaseModel):

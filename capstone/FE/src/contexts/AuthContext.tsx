@@ -5,10 +5,11 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { createApiClient } from "@/lib/api"
 
 type Language = "vn" | "eng"
@@ -24,7 +25,7 @@ interface AuthContextValue extends AuthState {
   login: (token: string, isAdmin: boolean) => void
   logout: () => Promise<void>
   setLanguage: (lang: Language) => void
-  setSessionId: (id: string) => void
+  setSessionId: (id: string | null) => void
   apiFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 }
 
@@ -32,6 +33,7 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const pathname = usePathname()
   const [state, setState] = useState<AuthState>({
     accessToken: null,
     isAdmin: false,
@@ -54,10 +56,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState((s) => ({ ...s, accessToken: newToken }))
   }, [])
 
-  const { apiFetch } = createApiClient(
-    () => tokenRef.current,
-    handleTokenRefresh,
-    handleAuthFailure
+  const { apiFetch } = useMemo(
+    () => createApiClient(() => tokenRef.current, handleTokenRefresh, handleAuthFailure),
+    [handleTokenRefresh, handleAuthFailure]
   )
 
   const login = useCallback((token: string, isAdmin: boolean) => {
@@ -79,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState((s) => ({ ...s, language: lang }))
   }, [])
 
-  const setSessionId = useCallback((id: string) => {
+  const setSessionId = useCallback((id: string | null) => {
     setState((s) => ({ ...s, sessionId: id }))
   }, [])
 
@@ -94,6 +95,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const isAdmin: boolean = data.is_admin ?? false
         setState((s) => ({ ...s, accessToken: token, isAdmin }))
         tokenRef.current = token
+
+        if (pathname === "/login" || pathname === "/register") {
+          router.push("/chat")
+        }
 
         // Load language preference
         const profile = await fetch("/api/profile", {

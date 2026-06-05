@@ -2,28 +2,35 @@
 _ROUTER_PROMPT = """
 {language_instruction}
 
+Decide what the student WANTS TO DO with this message, then pick the matching intent.
+Reason about the goal — do NOT match against surface wording or keywords.
+
+INTENTS (by goal):
+- retrieve : wants to KNOW a fact now — a definition, explanation, comparison, or "how does X work". One-shot answer.
+- roadmap  : wants DIRECTION — what to study, a learning path, or to START a new subject ("I want to learn X", "where do I begin", "what next").
+- teaching : wants to BE TAUGHT interactively — a full lesson, or to continue/review an active lesson.
+- confirm  : is agreeing to a proposal that is currently pending in [Student State].
+- unknown  : has no learning goal — off-topic, gibberish, or a reference that cannot be resolved.
+
+HOW TO DECIDE:
+1. Ask: "what does the student want to walk away with?" Classify a clear, standalone query from the QUERY ALONE.
+   Do NOT let [Chat History] override an obvious intent — past clarifications are not evidence about this message.
+2. Use [Student State] / [Chat History] ONLY to resolve short or referential inputs:
+   - "ok / yes / đồng ý"          → confirm IF a proposal is pending, else unknown.
+   - "continue / tiếp tục / more" → teaching if a lesson is active, else roadmap.
+   - "this / that / cái đó" with no referent → unknown.
+3. Trap: asking ABOUT a concept is retrieve even if it says "teach"/"roadmap"
+   ("dạy tôi SVM là gì", "lộ trình CNN là gì" → retrieve).
+
 [Student State]: {state}
 [Chat History]: {history}
 [Query]: {query}
 
-Classify into ONE intent: retrieve | roadmap | teaching | confirm | unknown
-
-RULES:
-- retrieve : factual question (what/why/how/compare/list about a concept)
-- roadmap  : planning what to study, asking for learning paths, OR expressing a desire to start learning a new topic/course (e.g., "I want to learn X", "Bắt đầu học Y")
-- teaching : deep lecture or continue/review current lesson
-- confirm  : affirmative response AND student_state has pending_proposal
-- unknown  : off-topic, gibberish, or no clear learning intent
-
-CRITICAL — check state + history before deciding:
-- "Ok/Sure/Yes" → confirm ONLY if pending_proposal is set in state
-- "Continue/Tiếp tục" → teaching if lesson is active in history, else roadmap
-- Short vague refs ("this", "more", "cái đó") → check history for referent; if none, unknown
-
-EXAMPLES (S=state hint, H=last TA message):
+Boundary cases (S=state hint, H=last TA message):
 {few_shot}
 
-Output thought and EXACTLY one word: retrieve, roadmap, teaching, confirm, or unknown
+Decide the intent internally. Output ONLY the single word — no reasoning, no punctuation, no extra text:
+retrieve, roadmap, teaching, confirm, or unknown.
 """
 
 
@@ -32,38 +39,22 @@ Output thought and EXACTLY one word: retrieve, roadmap, teaching, confirm, or un
 _RETRIEVE_REFINE_PROMPT = """
 {language_instruction}
 
-You received retrieval results from the RAG agent. Synthesize them into a pedagogical response.
+You received retrieval results from the RAG agent. Synthesize them into a pedagogical answer.
+(Style — tone, trilingual terms, Markdown, closing next step — is set by your system prompt.)
 
-CONTEXT PROVIDED:
-- worker_results["RAG"]: Contains entity_ids, content, and optionally bridge_concepts
-- student_state: Current student position and mastery
+INPUT:
+- worker_results["RAG"]: entity_ids, content, optional bridge_concepts
+- student_state: current position and mastery
 
-YOUR TASK:
+TASK:
 1. If RAG found content (status=SUCCESS):
-   - Present the factual answer clearly, using beautiful Markdown format with clear spacing, lists, and headings.
-   - If bridge_concepts exist: mention prerequisite gaps and explain them pedagogicaly.
-   - If is_deep=true: warn student about knowledge distance and suggest a helpful learning path.
+   - Present the factual answer clearly.
+   - If bridge_concepts exist: name the prerequisite gaps and explain them.
+   - If is_deep=true: warn about the knowledge distance and suggest a learning path.
 2. If RAG found nothing (status=FAIL or content is empty):
-   - Politely tell student the topic was not found in the knowledge base and invite them to rephrase or ask about related topics.
-   - Do NOT fabricate an answer under any circumstances.
+   - Tell the student the topic was not found and invite them to rephrase. Do NOT fabricate.
 
-RESPONSE GUIDELINES:
-- **Tone & Style**: Maintain an encouraging, professional, and pedagogical tone. Be supportive and friendly.
-- **Trilingual Technical Terms**: You MUST use trilingual terms for key concepts/technical words using the structure: Term (English_Term - Term) e.g., "Mạng nơ-ron (Neural Network - Mạng nơ-ron)".
-- **Visual Presentation**: Present all answers using scientific, structured, and visually clean Markdown. Use bullet points and appropriate headings.
-
-OUTPUT FORMAT:
-You must output a valid JSON object matching the TAOutput schema:
-- "summary": A very short summary of the explanation (1 sentence max).
-- "message": The full factual/pedagogical answer to the student (using Markdown).
-- "ui_action": null or a frontend navigation JSON dict.
-
-EXAMPLE OUTPUT:
-{
-  "summary": "Giải thích khái niệm Support Vector Machine (SVM)",
-  "message": "SVM là một thuật toán học máy giám sát...",
-  "ui_action": null
-}
+summary = one-sentence gist; message = the full Markdown answer.
 """
 
 _DEEP_CHECK_PROMPT = """
@@ -367,48 +358,24 @@ PROPOSAL DATA:
 - Upcoming path: {new_upcoming}
 - Source: {source_wf}
 
-FORMAT this as a friendly, clear message for the student:
-1. Explain WHY this change is being proposed with pedagogical justification.
-2. List the proposed learning path clearly using bullet points.
-3. Ask the student to confirm: "Bạn đồng ý không?" (or "Do you agree?" in English)
+Present this to the student:
+1. Explain WHY this path is proposed (pedagogical justification).
+2. List the proposed path as bullet points.
+3. End by asking them to confirm: "Bạn đồng ý không?" / "Do you agree?"
 
-RESPONSE GUIDELINES:
-- **Tone & Style**: Warm, encouraging, supportive, and pedagogical.
-- **Trilingual Technical Terms**: Use trilingual Term (English_Term - Term) for all technical concepts in your explanation.
-- **Visual Presentation**: Format with scientific, clean, and highly readable Markdown. Use clear headings and lists.
-
-OUTPUT FORMAT:
-You must output a valid JSON object matching the TAOutput schema.
-EXAMPLE OUTPUT:
-{
-  "summary": "Đề xuất lộ trình học Deep Learning",
-  "message": "Chào bạn, dựa trên yêu cầu, tôi đề xuất lộ trình mới bắt đầu từ Neural Networks...",
-  "ui_action": null
-}
+summary = one-sentence gist; message = the full Markdown message.
 """
 
 _TEACH_PRESENT_PROMPT = """
 {language_instruction}
 
-Below is the lecture material generated by the teaching module.
-Present it to the student with a brief heading summary and the lecture content (polished for high readability if needed).
-
-RESPONSE GUIDELINES:
-- **Tone & Style**: Encouraging, professional, interactive, and deeply pedagogical. Keep the student engaged.
-- **Trilingual Technical Terms**: Use trilingual Term (English_Term - Term) for all key technical terms.
-- **Visual Presentation**: Format using gorgeous scientific Markdown, with clear spacings, section dividers, bold concepts, and structured lists.
+Below is the lecture material from the teaching module. Present it to the student,
+polishing for readability. Keep it engaging and interactive.
 
 Lecture Data:
 {teach_res}
 
-OUTPUT FORMAT:
-You must output a valid JSON object matching the TAOutput schema.
-EXAMPLE OUTPUT:
-{
-  "summary": "Bài giảng: Kiến trúc Transformer",
-  "message": "Chúng ta hãy cùng tìm hiểu về kiến trúc Transformer. Đầu tiên...",
-  "ui_action": null
-}
+summary = one-sentence heading; message = the full Markdown lecture.
 """
 
 # --- UNKNOWN FALLBACK ---
@@ -419,30 +386,19 @@ STUDENT QUERY: {query}
 STUDENT STATE: {state}
 CHAT HISTORY: {history}
 
-The student's query could not be classified as a learning request. It may be off-topic, ambiguous, or unclear.
+The query could not be classified as a learning request (off-topic, ambiguous, or unclear).
 
-YOUR TASK:
-- Do NOT tell the student the system has no data or that information is missing.
-- Do NOT pretend the query was about a specific topic.
-- Politely explain you didn't understand the request.
-- Guide the student on the 3 things you CAN help them with:
-  1. **Tra cứu kiến thức (Knowledge Lookup)**: Ask about concepts, algorithms, definitions, comparisons.
-     e.g., "SVM là gì?", "Các thuật toán phổ biến trong Machine Learning"
-  2. **Lộ trình học tập (Learning Roadmap)**: Plan a study path or ask what to learn next.
-     e.g., "Nên học Deep Learning thế nào?", "Tôi mới bắt đầu, nên học gì?"
-  3. **Bài giảng chi tiết (In-depth Lesson)**: Start or continue an interactive lesson.
-     e.g., "Dạy tôi bài học mới", "Tiếp tục bài học"
+TASK:
+- Do NOT claim missing data, and do NOT pretend the query was about a specific topic.
+- Politely say you didn't fully understand, then guide them to the 3 things you can help with:
+  1. **Tra cứu kiến thức (Knowledge Lookup)** — concepts, algorithms, definitions, comparisons.
+     e.g. "SVM là gì?", "Các thuật toán phổ biến trong Machine Learning".
+  2. **Lộ trình học tập (Learning Roadmap)** — plan a study path or ask what to learn next.
+     e.g. "Nên học Deep Learning thế nào?", "Tôi mới bắt đầu, nên học gì?".
+  3. **Bài giảng chi tiết (In-depth Lesson)** — start or continue an interactive lesson.
+     e.g. "Dạy tôi bài học mới", "Tiếp tục bài học".
 
-RESPONSE GUIDELINES:
-- **Tone & Style**: Warm, friendly, supportive, and pedagogical.
-- **Trilingual Technical Terms**: Use trilingual Term (English_Term - Term) for technical keywords.
-- **Visual Presentation**: Present a clean, well-spaced Markdown output with bullet points for easy reading.
-
-OUTPUT FORMAT:
-You must output a valid JSON object matching the TAOutput schema:
-- "summary": "Yêu cầu làm rõ câu hỏi" (or "Clarification needed" in English).
-- "message": A friendly, brief Markdown response guiding the student.
-- "ui_action": null.
+summary = "Yêu cầu làm rõ câu hỏi" / "Clarification needed"; message = the friendly Markdown guidance.
 """
 
 import os

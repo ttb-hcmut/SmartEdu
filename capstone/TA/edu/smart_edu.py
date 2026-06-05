@@ -1,3 +1,4 @@
+import re
 import time
 import logging
 import asyncio
@@ -16,7 +17,7 @@ from TA.edu.workflow.retrieve import build_retrieve_wf
 from TA.edu.workflow.roadmap import build_roadmap_wf
 from TA.edu.workflow.teach import build_teach_wf
 
-from TA.edu.helper.utils import parse_student_state, safe_parse_structured, extract_llm_raw_text
+from TA.edu.helper.utils import parse_student_state, safe_parse_structured, extract_llm_raw_text, extract_agent_result
 from TA.edu.helper.context import extract_ta_context
 import os
 from TA.tracing.tracer import AgentTracer
@@ -111,17 +112,24 @@ class SmartEdu:
 
         start_invoke = time.time()
         ## -- Router stays as lightweight raw LLM call (speed matters here)
-        llm = ta.model.bind(options={"temperature": 0, "num_predict": 100})
+        ## -- num_predict must exceed gpt-oss hidden-reasoning budget (~150-320 tok);
+        ##    100 truncated the model before the final-channel word → empty content → 'unknown'.
+        llm = ta.model.bind(options={"temperature": 0, "num_predict": 256})
         res = await llm.ainvoke(
             [("user", prompt)],
             config=config
         )
-        intent = res.content.strip().lower()
+        ## -- Take the LAST allowed token: prompt reasons first, then emits the word.
+        raw = (res.content or "").lower()
+        matches = re.findall(r"\b(retrieve|roadmap|teaching|confirm|unknown)\b", raw)
+        intent = matches[-1] if matches else "unknown"
         logger.info(f"[SMART_EDU_LOG] Node: TA_Router | Time: {time.time() - start_invoke:.4f}s |")
         logger.info(f"[SMART_EDU_LOG] Intent: {intent} | Response: {res}")
-        if intent not in ("retrieve", "roadmap", "teaching", "confirm", "unknown"):
-            logger.warning(f"[ta_router_node] LLM intent '{intent}' not in allowed list. Defaulting to 'unknown'.")
-            intent = "unknown"
+        if not matches:
+            logger.warning(
+                f"[ta_router_node] No intent token in LLM response; defaulting to 'unknown'. "
+                f"query={state.get('user_query', '')!r} raw={res.content!r}"
+            )
 
         log_filename = config.get("configurable", {}).get("log_filename") or os.getenv("TEST_LOG_FILENAME")
         if log_filename:
@@ -162,7 +170,7 @@ class SmartEdu:
         prompt = f"{refine_prompt}\nData: {results}"
 
         ## -- Inject prior TA messages for coherence
-        ta_context = _extract_ta_context(state)
+        ta_context = extract_ta_context(state)
         if ta_context:
             prompt = f"[Prior TA reasoning]:\n{ta_context}\n\n{prompt}"
 
@@ -173,10 +181,11 @@ class SmartEdu:
                 {"messages": [("user", prompt)], "current_node": "TA_Retrieve_Finish"},
                 config=config,
             )
-            ta_output: TAOutput = result["structured_response"]
         except Exception as e:
             logger.warning(f"[ta_retrieve_finish] Agent invoke failed: {e}. Attempting json_repair.")
             ta_output = safe_parse_structured(extract_llm_raw_text(e), TAOutput)
+        else:
+            ta_output = extract_agent_result(result, TAOutput, "ta_retrieve_finish")
 
         log_filename = config.get("configurable", {}).get("log_filename") or os.getenv("TEST_LOG_FILENAME")
         if log_filename:
@@ -267,10 +276,11 @@ class SmartEdu:
                 {"messages": [("user", prompt)], "current_node": "TA_Roadmap_Finish"},
                 config=config,
             )
-            ta_output: TAOutput = result["structured_response"]
         except Exception as e:
             logger.warning(f"[ta_roadmap_finish] Agent invoke failed: {e}. Attempting json_repair.")
             ta_output = safe_parse_structured(extract_llm_raw_text(e), TAOutput)
+        else:
+            ta_output = extract_agent_result(result, TAOutput, "ta_roadmap_finish")
 
         log_filename = config.get("configurable", {}).get("log_filename") or os.getenv("TEST_LOG_FILENAME")
         if log_filename:
@@ -344,10 +354,11 @@ class SmartEdu:
                 {"messages": [("user", prompt)], "current_node": "TA_Teach_Finish"},
                 config=config,
             )
-            ta_output: TAOutput = result["structured_response"]
         except Exception as e:
             logger.warning(f"[ta_teach_finish] Agent invoke failed: {e}. Attempting json_repair.")
             ta_output = safe_parse_structured(extract_llm_raw_text(e), TAOutput)
+        else:
+            ta_output = extract_agent_result(result, TAOutput, "ta_teach_finish")
 
         log_filename = config.get("configurable", {}).get("log_filename") or os.getenv("TEST_LOG_FILENAME")
         if log_filename:
@@ -468,10 +479,11 @@ class SmartEdu:
                 {"messages": [("user", prompt)], "current_node": "TA_Unknown_Finish"},
                 config=config,
             )
-            ta_output: TAOutput = result["structured_response"]
         except Exception as e:
             logger.warning(f"[ta_unknown_finish] Agent invoke failed: {e}. Attempting json_repair.")
             ta_output = safe_parse_structured(extract_llm_raw_text(e), TAOutput)
+        else:
+            ta_output = extract_agent_result(result, TAOutput, "ta_unknown_finish")
 
         log_filename = config.get("configurable", {}).get("log_filename") or os.getenv("TEST_LOG_FILENAME")
         if log_filename:

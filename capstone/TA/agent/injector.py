@@ -25,6 +25,7 @@ class AgentInjector:
 
             if agent_name in AGENT_SPECS:
                 spec = AGENT_SPECS[agent_name]
+                DEBUG = spec["debug"]
                 agent_tools = spec["tools"](tools_factory)
                 agent = create_agent(
                     model=llm_instance,
@@ -32,7 +33,7 @@ class AgentInjector:
                     system_prompt=agent_prompt,
                     response_format=ToolStrategy(schema=spec["schema"]),
                     middleware=[NodeMiddle()],
-                    debug=True,
+                    debug=DEBUG,
                     name=agent_name,
                 )
                 agent.model = llm_instance

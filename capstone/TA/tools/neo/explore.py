@@ -19,6 +19,10 @@ class RecommendNew(NeoTool):
 
     def _run(self, course_filter: str = None, from_node: str = None, max_results: int = 10, config: RunnableConfig = None):
         session_id = (config or {}).get("configurable", {}).get("session_id", "")
+        if course_filter:
+            course_filter = self._norm_name(course_filter)
+        if from_node:
+            from_node = self._norm_name(from_node)
         print(f"Run {self.name} | course_filter={course_filter}, from_node={from_node}, max={max_results}")
 
         if from_node:
@@ -117,6 +121,7 @@ class CourseBackbone(NeoTool):
 
     def _run(self, course_name: str, max_hubs: int = 15, config: RunnableConfig = None):
         session_id = (config or {}).get("configurable", {}).get("session_id", "")
+        course_name = self._norm_name(course_name)
         print(f"Run {self.name} | course={course_name}, max_hubs={max_hubs}")
 
         hub_cypher = """
@@ -196,6 +201,7 @@ class CourseRelevance(NeoTool):
     args_schema: Type[BaseModel] = RelevanceInput
 
     def _run(self, target_course: str, min_degree: int = 3):
+        target_course = self._norm_name(target_course)
         print(f"Run {self.name} | target={target_course}, min_degree={min_degree}")
 
         cypher = """
@@ -258,6 +264,8 @@ class OptimalPath(NeoTool):
 
     def _run(self, start_node: str, end_node: str, config: RunnableConfig = None):
         session_id = (config or {}).get("configurable", {}).get("session_id", "")
+        start_node = self._norm_name(start_node)
+        end_node = self._norm_name(end_node)
         print(f"Run {self.name} | start={start_node}, end={end_node}")
 
         cypher = """

@@ -19,21 +19,23 @@ export async function POST() {
       body: JSON.stringify({ refresh_token: refreshToken }),
     })
   } catch {
-    cookieStore.delete("refresh_token")
-    return NextResponse.json({ detail: "Service unavailable" }, { status: 503 })
+    const res = NextResponse.json({ detail: "Service unavailable" }, { status: 503 })
+    res.cookies.delete("refresh_token")
+    return res
   }
 
   if (!upstream.ok) {
-    cookieStore.delete("refresh_token")
-    return NextResponse.json({ detail: "Refresh failed" }, { status: 401 })
+    const res = NextResponse.json({ detail: "Refresh failed" }, { status: 401 })
+    res.cookies.delete("refresh_token")
+    return res
   }
 
   const data = await upstream.json()
   const { access_token, refresh_token: newRefresh, is_admin } = data
 
-  // Rotate the cookie if a new refresh token was issued
+  const res = NextResponse.json({ access_token, is_admin })
   if (newRefresh) {
-    cookieStore.set("refresh_token", newRefresh, {
+    res.cookies.set("refresh_token", newRefresh, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
@@ -41,6 +43,5 @@ export async function POST() {
       maxAge: 7200,
     })
   }
-
-  return NextResponse.json({ access_token, is_admin })
+  return res
 }

@@ -332,7 +332,7 @@ one of five intent categories and dispatches it to the corresponding sub-workflo
 
 \input{table/chap4/wf.tex}
 
-\subsubsection*{Intent Router}
+\subsubsection{Intent Router}
 
 Every query must be dispatched to the correct sub-workflow before reasoning begins---misrouting wastes computation and produces structurally wrong responses. 
 The router receives three inputs: (i) the student's current learning state, (ii) a  {skim}-mode chat summary, and (iii) the raw query---together disambiguating queries that appear identical but carry different intents across session contexts.
@@ -385,48 +385,20 @@ where \(\mathcal{P}(b)\) is the immediate prerequisite set of \(b\) and \(\tau\)
 
 \input{table/chap4/wf_2.tex}
 
-\paragraph*{Node: Roadmap Explore.}
-This node calls  {course\_backbone} to retrieve the top hub nodes of the target course, ranked by \(C_{deg}\). For each backbone node \(b_i\), it computes the shortest prerequisite path from the student's current position \(v_{\mathrm{cur}}\):
-
+Given the student's current position $v_{\mathrm{cur}}$, the system identifies the course backbone---its most foundationally connected concepts, ranked by $C_{deg}$---and computes the shortest prerequisite path to each backbone hub $b_i$ over the prerequisite sub-graph:
 \begin{equation}
     \mathrm{Path}(v_{\mathrm{cur}},\, b_i) = [v_1, v_2, \ldots, v_k]
 \end{equation}
-
-derived via shortest-path traversal over the prerequisite sub-graph. The union of these paths yields a topologically sorted 
-candidate list \(\mathcal{L}\).
-To condense \(\mathcal{L}\) into a navigable summary, a sliding window of size \(w\) and step \(s\) retains only the top-k 
-nodes ranking by \(C_{deg}\) per window:
+These paths are merged and topologically sorted into a candidate list $\mathcal{L}$. To keep the result navigable, a sliding window retains only the top-$k$ nodes by $C_{deg}$ per segment $W_i \subset \mathcal{L}$:
 \begin{equation}
-\begin{aligned}
-\text{With } W_i &\subset Path(v_{\mathrm{cur}},\, b_i); \\
-\mathrm{Selected}(W_i) 
-&= \operatorname{top\text{-}k}\bigl(W_i,\; C_{deg}\bigr)
-\end{aligned}
+    \mathrm{Selected}(W_i) = \operatorname{top\text{-}k}(W_i,\; C_{deg})
 \end{equation}
-
-The final condensed path is the ordered concatenation across all windows:
-
+yielding a condensed path where prerequisites always precede the concepts that depend on them:
 \begin{equation}
     P_{\mathrm{roadmap}} = \mathrm{Selected}(W_1) \oplus \mathrm{Selected}(W_2) \oplus \cdots \oplus \mathrm{Selected}(W_m)
 \end{equation}
 
-The topological ordering of \(\mathcal{L}\) is preserved in \(P_{\mathrm{roadmap}}\), ensuring prerequisites always precede dependents. The node is equipped with three tools:  {recommend\_new} (hub ranking for new learners),  {course\_backbone} (hub extraction for a named course), and  {course\_relevance} (cross-course dependency detection). The output is a structured object containing the recommended starting node, the learning goal, and \(P_{\mathrm{roadmap}}\) paired with mastery scores from \(\mu\).
-
-\paragraph*{Node: Roadmap Evaluator.}
-Before reaching the student, the proposed path is cross-referenced against \(\mu\) in a pure reasoning step (no tool calls). The evaluator performs three checks:
-\begin{enumerate}
-    \item  {Necessity audit} --- whether each hub is a gatekeeper concept whose removal would block downstream progress, or merely supplementary.
-    \item  {Prerequisite check} --- whether \(\Delta(b)\) is non-empty for any proposed node, signaling unmastered foundations.
-    \item  {Cognitive load assessment} --- whether the sequence avoids placing too many high-complexity nodes in immediate succession without scaffolding.
-\end{enumerate}
-The output is a feasibility judgment (boolean) with a structured critique narrative for the downstream advisory node.
-This node assesses the path's feasibility by verifying foundation prerequisites, identifying gatekeeper concepts, and ensuring the sequence avoids cognitive overload for the student.
-
-\paragraph*{Node: TA Advice.}
-This node reconciles the exploration data with the evaluator's critique. If \(\Delta(b) \neq \emptyset\) for any proposed node, it recommends addressing prerequisite gaps first; otherwise, it provides sequenced guidance through \(P_{\mathrm{roadmap}}\). Session context is injected for conversational coherence, and the finalized advice is passed to the synthesis node.
-
-\paragraph*{Synthesis: TA Roadmap Finish.}
-The synthesis node packages the advisory output into a formal  {Learning Proposal}. Unlike Retrieve bridge proposals (auto-applied), Roadmap proposals require explicit student confirmation before modifying session state---a high-stakes decision warranting informed consent. A subsequent  {confirm} intent triggers the Apply\_Proposal node to commit the path.
+Before the proposal reaches the student, it passes through a \textit{critic-actor} pass: a dedicated evaluator cross-references each backbone node against $\mu$, checking for unresolved gaps $\Delta(b) \neq \emptyset$, gatekeeper necessity, and cognitive load across the sequence. Its structured critique is then reconciled by an advisory agent into actionable guidance. Crucially, the resulting \textit{Learning Proposal} requires explicit student confirmation before modifying session state---unlike the auto-applied bridge proposals of the Retrieve workflow. Changing an entire learning trajectory is a high-stakes decision; the system is designed to inform and consent, not act unilaterally.
 
 \subsubsection{Workflow: Retrieve}\label{subsub:wf_retrieve}
 
@@ -434,17 +406,9 @@ The Retrieve workflow answers factual questions by navigating the Educational Kn
 
 \input{table/chap4/wf_1.tex}
 
-\paragraph*{Node: RAG Core.}
-The first tier resolves the concept query to a graph entity via  {entity\_finder}, then retrieves all associated educational content via  {rhetorical\_retriever} (organized by rhetorical role: definition, formula, theorem, example). The agent is capped at four tool calls to prevent runaway exploration. Output is a structured object containing the reasoning trace, entity identifiers, synthesized content, and a status flag (SUCCESS or FAIL).
+The two-tier design reflects a deliberate efficiency-first principle: the majority of factual queries are definitional and can be resolved with a single graph traversal---resolving the concept to a canonical entity and fetching its rhetorical content (definition, formula, theorem, example). Forcing deep structural analysis on every query would inflate latency without benefit. A dedicated no-tool classifier therefore makes a binary routing decision after the initial lookup: simple queries exit directly to synthesis, while relational queries (\textit{how does X relate to Y}) activate the deep tier.
 
-\paragraph*{Node: Deep Decision.}
-This no-tool node decides whether the query warrants deeper structural analysis. Simple definitional queries ( {what is X}) return SKIP; relational queries ( {how does X relate to Y}) from distant graph positions return DEEP. Isolating this decision prevents the retrieval tier from over-calling tools on simple queries.
-
-\paragraph*{Node: RAG DEEP.}
-This node identifies  {bridge concepts}---prerequisites on the structural path between the student's position and the queried concept---using  {edge\_explorer} to traverse multi-hop semantic relationships. Bridge candidates are ranked by \(C_{deg}\). Outputs: a knowledge gap score \(\gamma \in [0,1]\), an ordered bridge concept list, and---if bridges exist---an auto-applied  {bridge} proposal that adjusts the student's path.
-
-\paragraph*{Synthesis: TA Retrieve Finish.}
-The synthesis node consolidates core retrieval content, deep analysis findings, and session context into a single student-facing response. If no relevant content is found, the agent acknowledges this rather than fabricating an answer. Output follows the standard schema: a memo heading summary, the full formatted message, and an optional navigation action.
+When deep analysis is triggered, the workflow shifts from content retrieval to \textit{structural gap bridging}: it traverses multi-hop semantic relationships to identify prerequisite nodes on the path between the student's current position and the queried concept, ranked by $C_{deg}$. A knowledge gap score $\gamma \in [0,1]$ quantifies the structural distance, and identified bridge concepts are packaged into a proposal that is applied automatically---reflecting the lower stakes of a targeted path adjustment compared to a full roadmap change.
 
 \subsubsection{Workflow: Teach}\label{subsub:wf_teach}
 
@@ -452,13 +416,9 @@ The Teach workflow manages the continuous learning loop, delivering lectures, as
 
 \input{table/chap4/wf_3.tex}
 
-\paragraph*{Node: Teach Understand.}
-This node classifies the student's query into one of three sub-intents:  {review} (revisit prior material),  {continue} (advance the lesson), or  {evaluate} (submit for assessment). Ambiguous cases default to  {continue}. Review and continue route to content lookup; evaluate routes directly to the assessment node.
+The central design philosophy is a \textit{Socratic loop}: deliver content, elicit a response, assess understanding, and either advance the student's position in the EKG or reinforce the current concept. A fine-grained entry classifier distinguishes three teaching modes---\textit{continue} (advance), \textit{review} (revisit), and \textit{evaluate} (assess)---ensuring the same surface query maps to the correct instructional behavior given the session state.
 
-\paragraph*{Node: Teach Lookup.}
-To ensure a deep context view, this node employs an iterative  {Reason-Act} (ReAct) loop: starting from context \(\mathcal{C}\), the agent calls a tool, appends the result, and re-evaluates until the collected material is sufficient for lecture generation (Figure~\ref{fig:react_teach}).
-
-Two tools are available:  {get\_concept} resolves the current node to a structured reference (document ID, MinIO path, and page number), and  {get\_pages} extracts the corresponding PDF pages. If no hard reference exists, the flow falls back to the retrieval pipeline from Section~\ref{subsub:wf_retrieve}.
+Content collection for lecture generation uses an iterative Reason-Act (ReAct) loop rather than a single retrieval call, allowing the agent to reason about what material is still needed and continue calling tools until the context $\mathcal{C}$ is sufficient (Figure~\ref{fig:react_teach}). Two tools drive this loop: \texttt{get\_concept} resolves the current node to a structured document reference (ID, MinIO path, page number), and \texttt{get\_pages} extracts the corresponding PDF pages; if no direct reference exists, the flow falls back to the Retrieve pipeline.
 
 \begin{figure}[H]
 \centering
@@ -486,20 +446,4 @@ Two tools are available:  {get\_concept} resolves the current node to a structur
     \vspace{12pt}\caption{ReAct loop in Teach Lookup.}\label{fig:react_teach}
 \end{figure}
 
-\paragraph*{Node: Teach Lecture.}
-The lecture node receives collected content, the student's concept position, and recent chat history. Output adapts to both mode and mastery level:
-\begin{enumerate}
-    \item In  {continue} mode, the agent delivers an in-depth lecture with a closing challenge question, connecting new material to prior concepts.
-    \item In  {review} mode, the agent surveys recent concepts with targeted recall questions, prioritizing conceptual understanding over memorization.
-    \item Across both modes,  {Bloom's adaptation} adjusts the framing: lower mastery levels focus on definitions and basic recall; higher levels shift to application, reasoning, and synthesis.
-\end{enumerate}
-The output is a structured lecture text with an optional challenge question; PDF-sourced content triggers a front-end navigation action to display the corresponding page.
-
-\paragraph*{Node: Teach Evaluate.}
-This tool-free node analyzes recent interaction history to judge mastery. The agent assesses whether responses reflect genuine conceptual understanding or surface-level recall, rendering a pass or fail judgment---minor errors pass, superficial recall does not. The binary decision feeds into the Next\_Topic node for path advancement.
-
-\paragraph*{Node: Next Topic.}
-On a passing evaluation, this node retrieves neighboring concepts ranked by \(C_{deg}\), selects one to three next topics prioritizing prerequisite-safe, high-centrality advancement, and packages them as an auto-applied  {advance} proposal. On failure, it returns a STAY action and the student's position remains unchanged.
-
-\paragraph*{Synthesis: TA Teach Finish.}
-The synthesis node applies any auto-approved advance proposals, formats the lecture or evaluation feedback into the student-facing response, and attaches a PDF navigation action if the source content originated from a document.
+Lecture delivery is calibrated by the student's Bloom's taxonomy level: lower mastery receives definitions and grounded examples; higher mastery receives application problems and synthesis challenges. A closing challenge question is posed in \textit{continue} mode to close the teaching moment, while \textit{review} mode poses targeted recall questions over recently covered concepts. Assessment is deliberately tool-free---the agent judges mastery from conversational evidence alone, distinguishing genuine conceptual understanding from surface-level recall. The binary verdict then drives the session forward: a passing judgment triggers an auto-applied \textit{advance} proposal that moves the student's graph position to a high-centrality neighboring concept ranked by $C_{deg}$; a failing judgment returns a STAY action, preserving the current position for reinforcement.

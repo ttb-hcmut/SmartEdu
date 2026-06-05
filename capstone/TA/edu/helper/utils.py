@@ -2,9 +2,11 @@
 import logging
 import typing
 import types as _builtin_types
-from typing import Dict, Any, Type
+from typing import Dict, Any, Type, TypeVar
 
 from pydantic import BaseModel
+
+_T = TypeVar("_T", bound=BaseModel)
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +40,7 @@ def _strip_markdown_block(text: str) -> str:
     return text
 
 
-def safe_parse_structured(raw_text: str, schema_class: Type[BaseModel]) -> BaseModel:
+def safe_parse_structured(raw_text: str, schema_class: Type[_T]) -> _T:
     """
     Robustly parse raw LLM text into a Pydantic schema.
 
@@ -59,10 +61,18 @@ def safe_parse_structured(raw_text: str, schema_class: Type[BaseModel]) -> BaseM
             if isinstance(repaired, dict):
                 return schema_class.model_validate(repaired)
         except Exception as e:
-            logger.debug(
-                f"[safe_parse_structured] json_repair+validate failed for "
-                f"{schema_class.__name__}: {e}"
-            )
+            from pydantic import ValidationError
+            if isinstance(e, ValidationError):
+                fields = [
+                    f"{'.'.join(str(l) for l in err['loc'])}: {err['msg']}"
+                    for err in e.errors()
+                ]
+                logger.warning(
+                    f"[safe_parse_structured] {schema_class.__name__} validation failed "
+                    f"— fields: {fields} | raw[:200]: {cleaned[:200]!r}"
+                )
+            else:
+                logger.debug(f"[safe_parse_structured] {schema_class.__name__}: {e}")
 
     logger.warning(
         f"[safe_parse_structured] All parse attempts failed for "
@@ -71,7 +81,7 @@ def safe_parse_structured(raw_text: str, schema_class: Type[BaseModel]) -> BaseM
     return auto_default_schema(raw_text or "", schema_class)
 
 
-def auto_default_schema(raw_text: str, schema_class: Type[BaseModel]) -> BaseModel:
+def auto_default_schema(raw_text: str, schema_class: Type[_T]) -> _T:
     """
     Auto-construct a safe default Pydantic instance using field name + type heuristics.
 
@@ -98,6 +108,10 @@ def auto_default_schema(raw_text: str, schema_class: Type[BaseModel]) -> BaseMod
             continue
         kwargs[name] = _resolve_field_default(name, field_info.annotation, raw_text)
 
+    if kwargs:
+        logger.warning(
+            f"[auto_default_schema] {schema_class.__name__}: auto-filled {list(kwargs.keys())}"
+        )
     return schema_class(**kwargs)
 
 
@@ -136,6 +150,18 @@ def _resolve_field_default(name: str, annotation, raw_text: str):
     return None
 
 
+
+
+def extract_agent_result(result: dict, schema_class: Type[_T], node_name: str) -> _T:
+    """Extract structured_response from agent result dict.
+    Falls back to last message content when key is missing (agent finished without schema tool call).
+    """
+    if "structured_response" in result:
+        return result["structured_response"]
+    msgs = result.get("messages", [])
+    raw = msgs[-1].content if msgs and hasattr(msgs[-1], "content") else ""
+    logger.warning(f"[{node_name}] 'structured_response' missing — agent didn't submit schema tool. Attempting json_repair.")
+    return safe_parse_structured(raw, schema_class)
 
 
 def parse_agent_steps(messages: list) -> list:

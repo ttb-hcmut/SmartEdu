@@ -56,9 +56,16 @@ class GraphDB:
     def _insert_nodes(tx, nodes: List[Dict]) -> None:
         nodes = [n for n in nodes if n.get('name') and str(n.get('name')).strip()]
         query = """
+        WITH {`Rhetorical Node`: 1, `Knowledge Concept`: 2, `Knowledge Topic`: 3, `Knowledge Community`: 4} AS rank
         UNWIND $nodes AS node_item
         MERGE (n:Entity {name: node_item.name})
-        ON MATCH SET n.definition = coalesce(n.definition, node_item.definition)
+        ON MATCH SET
+            n.definition = coalesce(n.definition, node_item.definition),
+            n.typeNode = CASE
+                WHEN coalesce(rank[n.typeNode], 0) < coalesce(rank[node_item.typeNode], 0)
+                THEN node_item.typeNode
+                ELSE n.typeNode
+            END
         ON CREATE SET n = node_item
         WITH n, node_item
         CALL apoc.create.addLabels(n, [node_item.name]) YIELD node

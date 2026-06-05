@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
 import { toast } from "sonner"
 import { useAuth } from "@/contexts/AuthContext"
@@ -31,6 +32,8 @@ function Section({
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme()
   const { language, setLanguage, apiFetch } = useAuth()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   async function updateLanguage(lang: "vn" | "eng") {
     setLanguage(lang)
@@ -58,7 +61,7 @@ export default function SettingsPage() {
 
   return (
     <div className="flex min-h-dvh flex-col" style={{ backgroundColor: "var(--bg)" }}>
-      <TopBar title="Cài đặt" />
+      <TopBar title="Cài đặt" backHref="/chat" />
 
       <main className="mx-auto w-full max-w-[560px] space-y-6 px-6 py-12">
         <h1
@@ -76,9 +79,9 @@ export default function SettingsPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => updateLanguage(opt.value)}
-                className={cn(language === opt.value && "ring-2 ring-[--ring]")}
+                className={cn(mounted && language === opt.value && "ring-2 ring-[--ring]")}
                 style={
-                  language === opt.value
+                  mounted && language === opt.value
                     ? { borderColor: "var(--se-accent)", color: "var(--se-accent)" }
                     : undefined
                 }
@@ -100,9 +103,9 @@ export default function SettingsPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setTheme(opt.value)}
-                className={cn(theme === opt.value && "ring-2 ring-[--ring]")}
+                className={cn(mounted && theme === opt.value && "ring-2 ring-[--ring]")}
                 style={
-                  theme === opt.value
+                  mounted && theme === opt.value
                     ? { borderColor: "var(--se-accent)", color: "var(--se-accent)" }
                     : undefined
                 }

@@ -37,7 +37,7 @@ export function useSession() {
       mounted = false
       // keepalive: true fires the DELETE even when the page is unloading
       if (sessionIdRef.current && tokenRef.current) {
-        fetch(`${API}/system/v0/student/session/end`, {
+        fetch(`${API}/system/v0/student/session/end?session_id=${sessionIdRef.current}`, {
           method: "DELETE",
           keepalive: true,
           headers: { Authorization: `Bearer ${tokenRef.current}` },

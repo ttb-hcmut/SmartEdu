@@ -7,7 +7,7 @@ from core.schema.wf_state import AgentState
 from TA.edu.helper.schema import RoadmapExplore, RoadmapCritique, RoadmapFinal
 from TA.edu.helper.prompt import ROADMAP_PROMPT
 from TA.edu.helper.few_shot import get_language_instruction
-from TA.edu.helper.utils import filter_mastery, safe_parse_structured, extract_llm_raw_text
+from TA.edu.helper.utils import filter_mastery, safe_parse_structured, extract_llm_raw_text, extract_agent_result
 from TA.edu.helper.context import extract_ta_context
 
 
@@ -15,6 +15,14 @@ from TA.tracing.tracer import AgentTracer
 import os
 
 logger = logging.getLogger(__name__)
+
+
+def _explore_router(state: AgentState):
+    wr = state.get("worker_results", {})
+    r = wr.get("Roadmap", {})
+    if not r.get("steps") and not (r.get("goal") or "").strip():
+        return END
+    return "Roadmap_Evaluator"
 
 
 def build_roadmap_wf(agents):
@@ -34,7 +42,7 @@ def build_roadmap_wf(agents):
     builder.add_node("TA_Advice", _ta_advice)
 
     builder.set_entry_point("Roadmap_Explore")
-    builder.add_edge("Roadmap_Explore", "Roadmap_Evaluator")
+    builder.add_conditional_edges("Roadmap_Explore", _explore_router)
     builder.add_edge("Roadmap_Evaluator", "TA_Advice")
     builder.add_edge("TA_Advice", END)
 
@@ -74,10 +82,11 @@ async def roadmap_explore_logic(state: AgentState, rag_agent, config):
                 {"messages": [("user", instruction)], "current_node": "Roadmap_Explore"},
                 config={"recursion_limit": 30, **config},
             )
-            structured: RoadmapExplore = result["structured_response"]
         except Exception as e:
-            logger.warning(f"[roadmap_explore_logic] Structured output failed: {e}. Attempting json_repair.")
+            logger.warning(f"[roadmap_explore_logic] Agent invoke failed: {e}. Attempting json_repair.")
             structured = safe_parse_structured(extract_llm_raw_text(e), RoadmapExplore)
+        else:
+            structured = extract_agent_result(result, RoadmapExplore, "roadmap_explore_logic")
         
         report_lines = [
             f"========================= Agent \"{rag_agent.name}\" Runtime Report ==========================",

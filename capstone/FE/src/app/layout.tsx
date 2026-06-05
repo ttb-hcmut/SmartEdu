@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { SessionManager } from "@/contexts/SessionManager";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -26,8 +27,10 @@ export default function RootLayout({
       <body className="min-h-dvh antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <AuthProvider>
-            {children}
-            <Toaster richColors closeButton />
+            <SessionManager>
+              {children}
+              <Toaster richColors closeButton />
+            </SessionManager>
           </AuthProvider>
         </ThemeProvider>
       </body>

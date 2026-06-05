@@ -55,7 +55,8 @@ export function RegisterForm() {
       toast.success("Tài khoản đã được tạo thành công!", {
         description: "Bạn có thể đăng nhập ngay bây giờ.",
       })
-      router.push("/login")
+      // delay so Sonner mounts the toast before React navigates away
+      setTimeout(() => router.push("/login"), 1500)
     } catch {
       setError("Không thể kết nối đến máy chủ. Vui lòng thử lại.")
     } finally {

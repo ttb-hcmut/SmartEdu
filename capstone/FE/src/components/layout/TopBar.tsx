@@ -1,15 +1,15 @@
 "use client"
 
 import { useAuth } from "@/contexts/AuthContext"
-import { Button } from "@/components/ui/button"
-import { Settings } from "lucide-react"
+import { Settings, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 
 interface TopBarProps {
   title?: string
+  backHref?: string
 }
 
-export function TopBar({ title }: TopBarProps) {
+export function TopBar({ title, backHref }: TopBarProps) {
   const { sessionId } = useAuth()
 
   return (
@@ -20,6 +20,17 @@ export function TopBar({ title }: TopBarProps) {
         borderColor: "var(--se-border)",
       }}
     >
+      {backHref && (
+        <Link
+          href={backHref}
+          aria-label="Quay lại"
+          className="flex size-7 items-center justify-center rounded-xs transition-colors hover:bg-[var(--se-accent-subtle)]"
+          style={{ color: "var(--ink-muted)" }}
+        >
+          <ArrowLeft className="size-4" />
+        </Link>
+      )}
+
       {title && (
         <span
           className="text-sm font-medium"

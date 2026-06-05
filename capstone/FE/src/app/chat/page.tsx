@@ -7,7 +7,6 @@ import { Sidebar } from "@/components/layout/Sidebar"
 import { TopBar } from "@/components/layout/TopBar"
 import { ChatPanel } from "@/components/chat/ChatPanel"
 import { PDFSkeleton } from "@/components/pdf/PDFSkeleton"
-import { useSession } from "@/hooks/useSession"
 import { useAuth } from "@/contexts/AuthContext"
 import { type UiAction } from "@/lib/normalise"
 
@@ -20,7 +19,6 @@ const PDFViewer = dynamic(
 )
 
 export default function ChatPage() {
-  useSession()
   const { apiFetch } = useAuth()
 
   const [courses, setCourses] = useState<string[]>([])

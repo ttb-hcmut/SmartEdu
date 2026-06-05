@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server"
-import { cookies } from "next/headers"
 
 const API = process.env.BACKEND_URL ?? "http://localhost:5000"
 
@@ -35,15 +34,13 @@ export async function POST(req: NextRequest) {
   const data = await upstream.json()
   const { access_token, refresh_token, is_admin } = data
 
-  const cookieStore = await cookies()
-  cookieStore.set("refresh_token", refresh_token, {
+  const res = NextResponse.json({ access_token, is_admin })
+  res.cookies.set("refresh_token", refresh_token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 7200, // 2 hours
+    maxAge: 7200,
   })
-
-  // Never return refresh_token to the browser
-  return NextResponse.json({ access_token, is_admin })
+  return res
 }

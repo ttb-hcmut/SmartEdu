@@ -69,8 +69,14 @@ export function useChatPoll() {
 
         if (data.status === "finished" || data.result) {
           const r = data.result ?? data
+          const message: string = r.message || r.summary || ""
+          if (!message) {
+            setState("fail")
+            setError("Trợ lý không tạo được câu trả lời. Vui lòng thử lại.")
+            return
+          }
           setResult({
-            message: r.message ?? "",
+            message,
             uiAction: normaliseUiAction(r.ui_action ?? null),
           })
           setThought(null)

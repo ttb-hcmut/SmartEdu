@@ -1,3 +1,4 @@
+import os
 import time
 import logging
 from langgraph.graph import StateGraph, END
@@ -7,7 +8,7 @@ from core.schema.wf_state import AgentState, ConceptNode
 import TA.edu.helper.prompt as prompt_lib
 from TA.edu.helper.schema import RAGCore, RAGDeep, DeepDecision
 from TA.edu.helper.few_shot import get_language_instruction
-from TA.edu.helper.utils import parse_student_state, safe_parse_structured, extract_llm_raw_text
+from TA.edu.helper.utils import parse_student_state, safe_parse_structured, extract_llm_raw_text, extract_agent_result
 
 
 from TA.tracing.tracer import AgentTracer
@@ -123,12 +124,13 @@ async def rag_core(state: AgentState, rag_agent, config):
         try:
             result = await rag_agent.ainvoke(
                 {"messages": [("user", prompt)], "current_node": "RAG_Core"},
-                config={"recursion_limit": 40, **config},  
+                config={"recursion_limit": 40, **config},
             )
-            structured: RAGCore = result["structured_response"]
         except Exception as e:
             logger.warning(f"[rag_core] Structured output failed: {e}. Attempting json_repair.")
             structured = safe_parse_structured(extract_llm_raw_text(e), RAGCore)
+        else:
+            structured = extract_agent_result(result, RAGCore, "rag_core")
 
         
         report_lines = [
@@ -226,10 +228,11 @@ async def rag_deep(state: AgentState, rag_agent, config):
                 {"messages": [("user", f"{prompt}\nContext: {rag_data.get('content', '')}")], "current_node": "RAG_Deep"},
                 config={"recursion_limit": 15, **config},
             )
-            structured: RAGDeep = result["structured_response"]
         except Exception as e:
             logger.warning(f"[rag_deep] Structured output failed: {e}. Attempting json_repair.")
             structured = safe_parse_structured(extract_llm_raw_text(e), RAGDeep)
+        else:
+            structured = extract_agent_result(result, RAGDeep, "rag_deep")
 
         
         report_lines = [

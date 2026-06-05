@@ -5,7 +5,7 @@ from core.schema.wf_state import AgentState, ConceptNode
 from TA.edu.helper.schema import TeachEvalOutput, TeachLectureOutput, NextTopicOutput
 import TA.edu.helper.prompt as prompt_lib
 from TA.edu.helper.few_shot import get_language_instruction
-from TA.edu.helper.utils import safe_parse_structured, extract_llm_raw_text
+from TA.edu.helper.utils import safe_parse_structured, extract_llm_raw_text, extract_agent_result
 from TA.edu.helper.context import extract_ta_context
 import os
 from TA.tracing.tracer import AgentTracer
@@ -369,10 +369,11 @@ async def teach_lecture(state: AgentState, ta_agent, config):
             {"messages": [("user", prompt)], "current_node": "Teach_Lecture"},
             config=config,
         )
-        res: TeachLectureOutput = result["structured_response"]
     except Exception as e:
         logger.warning(f"[teach_lecture] Agent invoke failed: {e}. Attempting json_repair.")
         res = safe_parse_structured(extract_llm_raw_text(e), TeachLectureOutput)
+    else:
+        res = extract_agent_result(result, TeachLectureOutput, "teach_lecture")
 
     lecture_text = res.lecture
     if res.challenge_question:
