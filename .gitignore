@@ -25,6 +25,7 @@ docs/*
 
 !docs/draw/
 !docs/latex/
+!docs/Ref
 
 # LaTeX intermediate files
 *.aux

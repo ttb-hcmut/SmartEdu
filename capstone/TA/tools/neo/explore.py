@@ -6,6 +6,7 @@ from TA.tools.neo.schema import (
     RecommendInput, BackboneInput, RelevanceInput, OptimalPathInput,
     BackboneOutput, HubConnection, RelevanceOutput, ConceptNode
 )
+from TA.tools.tool_config import PREREQUISITE_WEIGHT
 
 
 class RecommendNew(NeoTool):
@@ -31,7 +32,7 @@ class RecommendNew(NeoTool):
             WHERE type(r) <> 'CONTENT' AND m.rrole IS NULL
             OPTIONAL MATCH (m)-[r2]->(other:Entity)
             WHERE type(r2) <> 'CONTENT' AND other.rrole IS NULL
-            WITH m, count(r2) AS semantic_out_degree
+            WITH m, sum(CASE WHEN type(r2) = 'PREREQUISITE' THEN $prereq_weight ELSE 1.0 END) AS semantic_out_degree
             ORDER BY semantic_out_degree DESC
             LIMIT $max_results
             OPTIONAL MATCH (m)-[:BELONGS_TO|PART_OF*1..2]->(c:Entity)
@@ -40,7 +41,7 @@ class RecommendNew(NeoTool):
                    m.typeNode AS type, semantic_out_degree AS out_degree,
                    c.name AS course_name
             """
-            params = {"from_node": from_node, "max_results": max_results}
+            params = {"from_node": from_node, "max_results": max_results, "prereq_weight": PREREQUISITE_WEIGHT}
         elif course_filter:
             cypher = """
             MATCH (course:Entity {name: $course_filter})
@@ -48,21 +49,21 @@ class RecommendNew(NeoTool):
             WHERE n.rrole IS NULL AND n.id <> course.id
             OPTIONAL MATCH (n)-[r]->(m:Entity)
             WHERE type(r) <> 'CONTENT' AND m.rrole IS NULL
-            WITH n, course, count(r) AS semantic_out_degree
+            WITH n, course, sum(CASE WHEN type(r) = 'PREREQUISITE' THEN $prereq_weight ELSE 1.0 END) AS semantic_out_degree
             ORDER BY semantic_out_degree DESC
             LIMIT $max_results
             RETURN n.name AS name, n.content AS content, 
                    n.typeNode AS type, semantic_out_degree AS out_degree,
                    course.name AS course_name
             """
-            params = {"course_filter": course_filter, "max_results": max_results}
+            params = {"course_filter": course_filter, "max_results": max_results, "prereq_weight": PREREQUISITE_WEIGHT}
         else:
             cypher = """
             MATCH (n:Entity)
             WHERE n.rrole IS NULL
             OPTIONAL MATCH (n)-[r]->(m:Entity)
             WHERE type(r) <> 'CONTENT' AND m.rrole IS NULL
-            WITH n, count(r) AS semantic_out_degree
+            WITH n, sum(CASE WHEN type(r) = 'PREREQUISITE' THEN $prereq_weight ELSE 1.0 END) AS semantic_out_degree
             ORDER BY semantic_out_degree DESC
             LIMIT $max_results
             OPTIONAL MATCH (n)-[:BELONGS_TO|PART_OF*1..2]->(c:Entity)
@@ -71,7 +72,7 @@ class RecommendNew(NeoTool):
                    n.typeNode AS type, semantic_out_degree AS out_degree,
                    c.name AS course_name
             """
-            params = {"max_results": max_results}
+            params = {"max_results": max_results, "prereq_weight": PREREQUISITE_WEIGHT}
 
         results = self.run_query(query=cypher, params=params)
         print(f"RecommendNew results: {len(results)} nodes")
@@ -130,14 +131,14 @@ class CourseBackbone(NeoTool):
         WHERE n.rrole IS NULL AND n.id <> course.id
         OPTIONAL MATCH (n)-[r]->(m:Entity)
         WHERE type(r) <> 'CONTENT' AND m.rrole IS NULL
-        WITH n, course, count(r) AS out_degree
+        WITH n, course, sum(CASE WHEN type(r) = 'PREREQUISITE' THEN $prereq_weight ELSE 1.0 END) AS out_degree
         ORDER BY out_degree DESC
         LIMIT $max_hubs
         RETURN n.id AS id, n.name AS name, n.content AS content,
                n.typeNode AS type, out_degree, course.name AS course_name
         """
         hubs = self.run_query(query=hub_cypher, params={
-            "course_name": course_name, "max_hubs": max_hubs
+            "course_name": course_name, "max_hubs": max_hubs, "prereq_weight": PREREQUISITE_WEIGHT
         })
         
         if not hubs:
