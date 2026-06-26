@@ -1,72 +1,57 @@
 \chapter{Fundamental Knowledge \& Related Work}
 \section{Fundamental Knowledge}
-This section discusses the fundamental techniques and applications foundational to the construction of the proposed system, categorized into 3 pillars: 
+This section discusses the fundamental techniques and applications foundational to the construction of the proposed system, categorized into 4 pillars: 
 \begin{itemize}
-    \item {Natural Language Processing (NLP):} The foundational process of transforming vast volumes of raw, unstructured textual input into logical, structured 
-    data formats that machine can understand. This is fundamental for document processing, reshaping all subsequent cognitive actions.
-    \item {Large Language Models (LLMs)}: The core reasoning and action components of the system, responsible for interpreting user queries, orchestrating tools, and generating responses. This pillar represents the "intelligence" of the system, enabling it to perform complex tasks and adapt to user needs.
-    \item {Agentic Orchestration:} The management layer responsible for coordinating specialized AI agents to execute complex, non-linear  workflows.
-    \item {System Design:} The architectural blueprint that ensures scalability and robustness, utilizing clean design patterns tailored for high-stakes educational environments.
+    \item {Natural Language Processing (NLP):} The process of transforming raw, unstructured text into structured data formats that machines can process. This forms the basis for document processing and subsequent analysis.
+    \item {Large Language Models (LLMs):} The reasoning components responsible for interpreting user queries, orchestrating tools, and generating responses. This enables the system to perform complex tasks and adapt to user needs.
+    \item {Agentic Orchestration:} The management layer that coordinates specialized AI agents to execute complex, non-linear workflows.
+    \item {System Design:} The architectural structure that ensures scalability and robustness, using design patterns tailored for educational environments.
 \end{itemize}
 \subsection{Natural Language Processing}
 
-Natural Language Processing (NLP) is a crucial field of study aiming to process unstructured data from documents to a structured, semantically rich representation. This process is designed to harness the full potential of complex entity-relationship paradigms, moving from raw text to machine-inferable logic. As outlined in the core objectives of language understanding, the goal is to put information into a semantically precise form that allows for further inferences.
+Natural Language Processing (NLP) converts unstructured document data into a structured representation. The goal is to translate raw text into a semantically precise format, enabling machine-inferable logic and further inferences.
 
-The standard pipeline for Natural Language Processing follows the sequence:
+The standard NLP pipeline follows this sequence:
 \begin{center}
     {Information Extraction (IE) $\longrightarrow$ Knowledge Modeling $\longrightarrow$ Information Retrieval}
 \end{center}
 
 \subsubsection*{Information Extraction (IE)}
-Information Extraction is the task of identifying and understanding limited, relevant portions of a text to produce a structured representation~\cite{StanfordNLP}. Its goal is to filter out linguistic noise and isolate the atomic units of knowledge. Traditional algorithms aim to extract keywords, following thế 2 methods:
+Information Extraction isolates relevant portions of text to produce a structured representation~\cite{StanfordNLP}. It filters out linguistic noise to capture the atomic units of knowledge. Traditional algorithms extract keywords using two primary methods:
 
 \begin{itemize}
-    \item {Keyword and Feature Extraction:} Utilizing dependency parsing and statistical methods (e.g., TF-IDF) to identify high-signal terms based on syntactic importance.
-    \item {Named Entity Recognition (NER):} A critical sub-task used to find and classify concepts or entities (e.g., specific academic theories, formulas, or historical figures) within a text database~\cite{StanfordNLP}. This identifies the "nodes" of our future backbone.
+    \item {Keyword and Feature Extraction:} Uses dependency parsing and statistical methods (e.g., TF-IDF) to identify high-signal terms based on syntactic importance.
+    \item {Named Entity Recognition (NER):} Classifies entities (e.g., academic theories, formulas, historical figures) within a text database~\cite{StanfordNLP}. These entities form the "nodes" of the system's knowledge graph.
 \end{itemize}
 
-To capture complex entities and relationships that rigid rule-based systems miss, the process relies on probabilistic modeling. The foundation of this approach is 
-Tokenization, which breaks down raw text into atomic units (tokens). Statistical algorithms, such as Conditional Random Fields (CRF) or Hidden Markov Models (HMM), 
-are then applied to these tokens to calculate the probability distribution of various interpretations. This allows the system to resolve linguistic ambiguities and 
-predict the most likely semantic structures or labels for sequences of text.
+To capture relationships that rigid rule-based systems miss, this process uses probabilistic modeling. It begins with Tokenization, breaking raw text into atomic units (tokens). Statistical algorithms like Conditional Random Fields (CRF) or Hidden Markov Models (HMM) then calculate probabilities for different interpretations, resolving linguistic ambiguities to predict the most likely semantic structure.
 
-While traditional probabilistic models logically and practically work in many usecases, they often struggle with sparse data and lack deep semantic understanding. 
-Deep Learning represents a significant advancement by shifting the target towards generating Embeddings. Instead of merely calculating discrete probabilities, Deep Learning 
-architectures map tokens into a continuous, high-dimensional vector space. In this embedding space, geometrically close vectors represent semantically related concepts, 
-allowing the system to grasp the underlying meaning, context, and nuance of the information rather than relying solely on surface-level statistics.
+Traditional probabilistic models often struggle with sparse data and lack deep semantic understanding. Deep Learning addresses this by generating Embeddings. Instead of calculating discrete probabilities, these architectures map tokens into a continuous, high-dimensional vector space. In this space, geometrically close vectors represent semantically related concepts, allowing the system to capture context and nuance rather than relying solely on surface-level statistics.
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.7\textwidth]{Images/fundamental/embedding.png}
-    \vspace{12pt}\caption{Transformer turn unstructured raw text into embeddings---numeric representation that hypothetically capture the core semantic}\label{fig:trans_embedding}
+    \vspace{12pt}\caption{Transformers convert raw text into embeddings, which are numeric representations of semantic meaning}\label{fig:trans_embedding}
 \end{figure}
-The Transformer architecture was introduced, being SOTAs as well as standard method nowadays. It fundamentally change the landscape 
-of NLP and enable modern Large Language Models (LLMs). The core innovation of the Transformer is the Attention Mechanism (specifically, Self-Attention). Instead of 
-processing tokens sequentially, Transformers process the entire sequence simultaneously. The Attention Mechanism calculates a weighted importance score for every 
-token relative to every other token in the sequence, regardless of their distance. This allows the model to instantly capture global context and long-range 
-dependencies, making it the most powerful method for extracting deep, complex information from unstructured texts.
+The Transformer architecture has become the standard method in NLP, enabling modern Large Language Models (LLMs). Its core innovation is the Self-Attention mechanism. Rather than processing tokens sequentially, Transformers process the entire sequence simultaneously. The attention mechanism calculates a weighted importance score for every token relative to all other tokens, allowing the model to capture global context and long-range dependencies from unstructured texts.
 
 \subsubsection*{Knowledge Modeling}
-Often overlooked in standard RAG systems, Knowledge Modeling is the construction stage where extracted entities are organized into a coherent structure that shapes how the system perceives and reasons.
+Often overlooked in standard Retrieval-Augmented Generation (RAG) systems, Knowledge Modeling is the construction stage where extracted entities are organized into a coherent structure that shapes how the system reasons.
 
 \begin{itemize}
-    \item {Semantic Parsing and Logical Form:} Mapping extracted relations into a semantically precise form, such as First-Order Predicate Calculus (FOPC) or 
-    Knowledge Graphs (KG). This creates a deterministic "Backbone Graph" of the curriculum.
-    \item {Embedding Space Topology:} Modeling knowledge within a continuous vector space where semantic similarity is represented by geometric proximity. 
-    This allows the system to handle concepts that are conceptually related but lexically distinct.
+    \item {Semantic Parsing and Logical Form:} Maps extracted relations into a semantically precise form, such as First-Order Predicate Calculus (FOPC) or Knowledge Graphs (KG). This creates a deterministic "Backbone Graph" of the curriculum.
+    \item {Embedding Space Topology:} Models knowledge within a continuous vector space where geometric proximity represents semantic similarity. This allows the system to handle concepts that are conceptually related but use different vocabulary.
 \end{itemize}
 
 \subsubsection*{Information Retrieval (IR)}
-Information Retrieval is the active execution stage based on the result of construction phases IE and Knowledge Modeling, where the goal is to identify documents or data points relevant to a specific information need from a large document set~\cite{StanfordNLP}.
+Information Retrieval is the active execution stage based on the results of IE and Knowledge Modeling. The goal is to identify data points relevant to a specific information need~\cite{StanfordNLP}.
 
 \begin{itemize}
-    \item {Lexical and Keyword Matching:} Corresponding to traditional IE, this method uses exact term overlaps to find specific references or symbolic links 
-    within the knowledge base.
-    \item {Vector Retrieval:} the most common modern approach, utilizing the embedding space to retrieve context based on semantic similarity, typically 
-    calculated via Cosine Similarity:
+    \item {Lexical and Keyword Matching:} Uses exact term overlaps to find specific references or symbolic links within the knowledge base.
+    \item {Vector Retrieval:} The standard modern approach, which uses the embedding space to retrieve context based on semantic similarity, typically calculated via Cosine Similarity:
     \begin{equation}
         \text{similarity}(\mathbf{A}, \mathbf{B}) = \frac{\mathbf{A} \cdot \mathbf{B}}{\|\mathbf{A}\| \|\mathbf{B}\|}
     \end{equation}
-    \item {The GraphRAG Paradigm:} A new powerful emerging method, where retrieval navigates the entity-relationship graph established during the modeling phase. Unlike discrete chunk retrieval, GraphRAG performs "multi-hop" reasoning to connect disparate concepts, enabling the system to resolve complex queries that require a global understanding of the educational roadmap.
+    \item {The GraphRAG Paradigm:} A retrieval method that navigates the entity-relationship graph established during the modeling phase. Unlike discrete chunk retrieval, GraphRAG performs "multi-hop" reasoning to connect disparate concepts, enabling the system to resolve complex queries that require a global understanding of the curriculum.
 \end{itemize}
 
 
@@ -93,29 +78,16 @@ By utilizing multi-head attention and positional encoding, Transformers can capt
 
 \subsubsection*{LLM Ecosystem: Proprietary vs Open-Weights}
 
-The landscape of Large Language Models in the industrial layer (not research layer) is categorized by deployment strategies and the degree of architectural transparency. Closed-source and 
-cloud-based models, such as GPT-4 and Claude, represent the proprietary tier of this ecosystem. These models are typically provided as a Service (SaaS), where interactions 
-occur via Application Programming Interfaces (APIs) hosted on centralized, high-performance infrastructures. While these proprietary solutions consistently deliver 
-state-of-the-art performance across a wide range of benchmarks, their internal mechanisms—including model weights, training datasets, and specific configurations—remain 
-opaque. Furthermore, their operational use often involves per-token costs, which can become a significant factor in large-scale or iterative research applications.
+The landscape of Large Language Models in the industrial sector is divided by deployment strategy and architectural transparency. Closed-source, cloud-based models like GPT-4 and Claude form the proprietary tier. Provided as a Service (SaaS), these models are accessed via APIs hosted on centralized infrastructure. While they deliver state-of-the-art performance, their internal mechanisms (weights, datasets, and configurations) remain opaque. Additionally, per-token API costs can limit large-scale or iterative research applications.
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.7\textwidth]{Images/fundamental/cloud_local_llm.png}
-    \vspace{12pt}\caption{Comparison of LLM Deployment Strategies: Traditional approaches (a) Direct cloud processing, (b) Local-only processing, and (c) Local-Cloud framework balance performance\-security without leaking IP (proposed by~\cite{IP_Safe_llm})}\label{fig:cloud_local_llm}
+    \vspace{12pt}\caption{Comparison of LLM Deployment Strategies: Traditional approaches (a) Direct cloud processing, (b) Local-only processing, and (c) Local-Cloud framework balance performance and security without leaking IP (proposed by~\cite{IP_Safe_llm})}\label{fig:cloud_local_llm}
 \end{figure}
-\\
-In contrast to the proprietary paradigm, the emergence of open-weights and local models has introduced a significant shift toward decentralized execution and 
-architectural transparency. Initiatives such as Meta’s Llama series and Mistral release their pre-trained model parameters to the public, allowing for deployment 
-on private, local infrastructures. This transparency facilitates full control over data sovereignty and privacy, as information does not need to leave the local 
-environment to be processed. Consequently, these models serve as foundational baselines, providing a stable platform for both academic research and industrial 
-innovation without the necessity of external API dependencies or recurring subscription fees.
 
-Building upon these general-purpose baselines, recent advancements in the field have catalyzed a trend toward specialization, 
-where models are fine-tuned or structurally modified for high-performance niche tasks. One prominent example is the development 
-of coding specialists, such as Qwen-coder or CodeLlama, which are optimized specifically for source code synthesis and complex 
-logical reasoning. These specialized variants often rival or even outperform significantly larger general-purpose models in 
-programming-centric contexts. Beyond text processing, research has also extended these baseline architectures into the multimodal 
-and generative domains. By integrating vision encoders for visual comprehension or combining LLM backbones with diffusion-based architectures, researchers have developed sophisticated models capable of high-fidelity image generation and cross-modal reasoning.
+In contrast, open-weights models enable decentralized execution and architectural transparency. Projects like Meta's Llama series and Mistral release their pre-trained parameters, allowing deployment on private hardware. This ensures full control over data sovereignty and privacy, as information remains local. These models serve as baselines for academic research and industrial applications without relying on external APIs or subscription fees.
+
+Building on these general-purpose baselines, researchers have fine-tuned models for specialized tasks. Coding specialists like Qwen-coder or CodeLlama are optimized for source code synthesis and logical reasoning, often rivaling larger general-purpose models in programming contexts. Beyond text, models have been extended into multimodal domains. By integrating vision encoders, developers enable visual comprehension and cross-modal reasoning.
 
 \subsubsection*{LLM Inference}
 
@@ -143,15 +115,13 @@ Top-$p$ (nucleus) sampling provides a dynamic alternative to Top-$k$. Instead of
 This allows the candidate pool to expand or contract organically based on the model's confidence. When the model is very confident, the nucleus contains only a few tokens; when uncertain, the nucleus expands to include more options.
 
 \paragraph*{Repetition Penalty}
-Repetition penalty modifies the logits of tokens that have already appeared in the generated sequence, mathematically reducing their likelihood of being selected again. This is crucial for preventing the model from entering infinite generation loops or excessively repeating specific phrases, ensuring a more natural and progressive text flow.
+Repetition penalty modifies the logits of tokens that have already appeared in the generated sequence, mathematically reducing their likelihood of being selected again. This prevents the model from entering infinite generation loops or excessively repeating specific phrases, ensuring a more natural text flow.
 
 
 \subsection{Agentic Systems}
 
 \subsubsection*{AI Agents}
-An Artificial Intelligence (AI) Agent is a computational system capable of autonomous task execution through the dynamic design 
-of workflows using available tools. AI agents can encompass a wide range of functions beyond natural language processing 
-including decision-making, problem-solving, interacting with external environments, and performing actions.
+An Artificial Intelligence (AI) Agent is a computational system capable of autonomous task execution through the dynamic design of workflows using available tools. Beyond language processing, AI agents can make decisions, solve problems, and interact with external environments.
 
 \begin{figure}[H]
     \centering
@@ -159,26 +129,17 @@ including decision-making, problem-solving, interacting with external environmen
     \vspace{12pt}\caption{Basic Single Agent diagram}\label{fig:react}
 \end{figure}
 
-Unlike Large Language Models (LLMs), which produce responses solely based on the static data used to train them and are bounded by fixed knowledge limits, agentic 
-technology uses tool calling on the backend to obtain up-to-date information. They optimize workflows and create subtasks autonomously to achieve complex goals. It is 
-responsible for translating high-level natural language queries into executable workflows that complete real life tasks.
-What truly pushing an AI agent to achive what LLM can't lies in the harnessing of agentic technology. Harness is the process of constructing and integrating 
-systems or infrastructure that boosts capabilities into the system. The harnessing of agentic system is critical for the agentic performance, as it enables the system 
-to navigate the complex, multi-step processes required in deep reasoning, complex tasks.
+Unlike standard LLMs, which rely solely on static training data and fixed knowledge limits, agentic technology uses tool calling on the backend to obtain up-to-date information. Agents optimize workflows and create subtasks autonomously, translating high-level natural language queries into executable workflows that complete real-life tasks. 
+
+What truly pushes an AI agent to achieve what an LLM alone cannot is the harnessing of agentic technology. This involves constructing and integrating systems that boost capabilities, enabling the agent to navigate the complex, multi-step processes required for deep reasoning.
+
 \paragraph*{LLM: The Logical Core}
-Large Language Models (LLMs) serve as the brain of the agent, represent the thinking capability. They provide the reasoning capabilities necessary to interpret vague user queries and orchestrate the appropriate tools to find answers. The LLM is responsible for parsing the user's intent, identifying missing information, and deciding on the next actions. The reasoning and decision-making depend heavily on the type of LLM used. Upon studying the current industry, mainstream types of models include:
+Large Language Models (LLMs) serve as the brain of the agent, representing its thinking capacity. They provide the reasoning capabilities necessary to interpret vague user queries and orchestrate the appropriate tools. The LLM is responsible for parsing intent, identifying missing information, and deciding on the next actions. System decision-making depends heavily on the model used:
 \begin{itemize}
-    \item {Reasoning Models: }
-Models such as OpenAI o1 or DeepSeek R1 are optimized for Chain of Thought processing. They excel at complex logical deduction and planning multi-step workflows before taking action. This makes them ideal for the planning phase, where they must decompose difficult user queries into a clear, executable plan before invoking any tools.
-    \item {Function Calling Models}
-Models such as GPT-4o or Claude 3.5 Sonnet are fine-tuned specifically to output structured data, such as JSON, rather than just conversational text. 
-This capability is efficient for tool configuration and defining output formats, critical for the execution phase.
-    \item {Multimodal Models}
-    Models such as Gemini 1.5 Pro are trained with multimodal input, meaning they can natively understand both text and visual inputs. 
-    \item{Lightweight Efficiency Models}
-    Smaller models like Llama 3 8B or GPT-4o-mini are faster and cheaper to run. They are perfect for narrow, 
-    repetitive tasks. Moreover, the ability to easily train and fine-tune these models facilitates customization 
-    in the design of Agentic systems.
+    \item {Reasoning Models:} Models like OpenAI o1 or DeepSeek R1 are optimized for Chain of Thought processing. They excel at complex logical deduction and planning multi-step workflows, making them ideal for decomposing difficult queries into clear, executable plans.
+    \item {Function Calling Models:} Models such as GPT-4o or Claude 3.5 Sonnet are fine-tuned to output structured data (e.g., JSON). This is efficient for tool configuration and defining output formats, which is critical for the execution phase.
+    \item {Multimodal Models:} Models such as Gemini 1.5 Pro natively understand both text and visual inputs.
+    \item {Lightweight Efficiency Models:} Smaller models like Llama 3 8B or GPT-4o-mini are faster and cheaper to run, making them ideal for narrow, repetitive tasks. 
 \end{itemize}
 
 
