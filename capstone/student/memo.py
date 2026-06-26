@@ -33,19 +33,24 @@ class Memo:
         else:
             self.session = Session(id=session_id)
 
-    def get_formatted_history(self, mode: str = "full") -> str:
+    ## recent_turns set -> last N turns full, older turns skim. bounds tokens.
+    def get_formatted_history(self, mode: str = "full", recent_turns: Optional[int] = None) -> str:
         if not self.session.chats:
             return "No prior context."
-            
+
+        chats = self.session.chats
+        cutoff = (len(chats) - recent_turns) if recent_turns is not None else 0
+
         formatted_lines = []
-        for chat in self.session.chats:
+        for i, chat in enumerate(chats):
+            chat_mode = "skim" if (recent_turns is not None and i < cutoff) else mode
             for msg in chat.messages:
                 if msg.role == "student":
                     formatted_lines.append(f"Student: {msg.message}")
                 elif msg.role == "TA":
-                    if mode == "skim":
+                    if chat_mode == "skim":
                         formatted_lines.append(f"TA: {msg.heading}")
                     else:
                         formatted_lines.append(f"TA: {msg.message}")
-                        
+
         return "\n".join(formatted_lines)
