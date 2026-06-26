@@ -5,16 +5,13 @@ build/
 dist/
 wheels/
 *.egg-info
+.pytest_cache
 
 # Virtual environments & UV
 .venv
 uv.lock
 .python-version
-
 # Other files
-
-test/
-
 
 # Secrets & local DB
 .env
