@@ -37,10 +37,10 @@ class LLMConfig:
             num_ctx=4096,
         ),
         "rag": LLMProfile(
-            model_name="qwen3:8b", 
-            temperature=0.0,  ## -- 0.0 for deterministic output; small model needs max stability
-            num_ctx=2048,     ## -- bumped from 1024: prompt is ~1800 tokens with tool results
-            num_predict=512,  ## -- bumped: needs room for full JSON response
+            model_name="qwen3:8b",
+            temperature=0.0,
+            num_ctx=8192,
+            num_predict=512,
             keep_alive="30m",
         ),
         "worker": LLMProfile(

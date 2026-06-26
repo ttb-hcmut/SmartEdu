@@ -79,7 +79,58 @@ def create_refs(chunks: List[dict], storage_type: str = "minio") -> List[Ref]:
             id=c["chunk_id"],
             name=c["doc_name"],
             summary=c["content"][:200],
-            p_num=(c["page_num"], c["page_num"])
+            p_num=c["page_num"]  # already a (start, end) tuple
         )
         for c in chunks
     ]
+
+
+def extract_tree(file_path: str) -> dict:
+    ## docling authored hierarchy -> {sections tree, fine items} for :Section/:Passage build
+    converter = DocumentConverter()
+    doc = converter.convert(file_path).document
+
+    with open(file_path, "rb") as f:
+        file_hash = hashlib.md5(f.read()).hexdigest()
+    doc_name = os.path.splitext(os.path.basename(file_path))[0]
+
+    root_id = f"{file_hash}_sec_root"
+    sections = {
+        "": {"id": root_id, "title": doc_name, "level": 0,
+             "parent_id": None, "p_num": (1, 1), "order": 0}
+    }
+    items: List[dict] = []
+
+    for order, ch in enumerate(HierarchicalChunker().chunk(doc)):
+        text = (ch.text or "").strip()
+        if len(text) < 5:
+            continue
+
+        meta = ch.meta
+        pages = [it.prov[0].page_no for it in getattr(meta, "doc_items", []) if it.prov]
+        p_lo, p_hi = (min(pages), max(pages)) if pages else (1, 1)
+        headings = [h for h in (getattr(meta, "headings", None) or []) if h and h.strip()]
+
+        parent_id, path = root_id, []
+        for lvl, h in enumerate(headings):
+            path.append(h.strip())
+            key = " > ".join(path)
+            if key not in sections:
+                sid = f"{file_hash}_sec_{hashlib.md5(key.encode()).hexdigest()[:8]}"
+                sections[key] = {"id": sid, "title": h.strip(), "level": lvl + 1,
+                                 "parent_id": parent_id, "p_num": (p_lo, p_hi), "order": len(sections)}
+            else:  # widen ancestor span as children stream in
+                lo, hi = sections[key]["p_num"]
+                sections[key]["p_num"] = (min(lo, p_lo), max(hi, p_hi))
+            parent_id = sections[key]["id"]
+
+        items.append({"id": f"{file_hash}_item_{order}", "section_id": parent_id,
+                      "text": text, "p_num": (p_lo, p_hi), "order": order})
+
+    # widen root span to cover the whole doc
+    if items:
+        sections[""]["p_num"] = (min(i["p_num"][0] for i in items),
+                                 max(i["p_num"][1] for i in items))
+
+    return {"doc_id": file_hash, "doc_name": doc_name,
+            "sections": list(sections.values()), "items": items}

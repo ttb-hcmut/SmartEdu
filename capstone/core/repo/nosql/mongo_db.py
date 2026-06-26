@@ -48,6 +48,8 @@ class Mongo_DB:
         self.db = self.client[config.db_name]
         self.students: Collection = self.db['students']
         self.learning_logs: Collection = self.db['learning_logs']
+        self.learning_trees: Collection = self.db['learning_trees']
+        self.course_trees: Collection = self.db['course_trees']
 
     def create_student(self, student_id: str):
         doc = self.students.find_one({"_id": student_id})
@@ -170,3 +172,83 @@ class Mongo_DB:
         if not doc:
             return {}
         return doc.get("session_context", {}).get(session_id, {})
+
+    ## learning tree (ADR-0003)
+
+    def get_learning_tree(self, student_id: str, course: str) -> dict:
+        doc = self.learning_trees.find_one({"_id": f"{student_id}::{course}"})
+        return doc or {}
+
+    def seed_learning_tree(self, student_id: str, course: str, nodes: List[dict]):
+        ## re-seed keeps mastery + discovered
+        key = f"{student_id}::{course}"
+        doc = self.learning_trees.find_one({"_id": key})
+        existing = {n["name"]: n for n in (doc or {}).get("nodes", [])}
+        merged, order = [], 0
+        for n in nodes:
+            prev = existing.pop(n["name"], None)
+            merged.append({
+                "name": n["name"], "type": n.get("type", ""),
+                "topic": n.get("topic", ""), "order": order,
+                "mastery": (prev or {}).get("mastery", 0),
+                "status": (prev or {}).get("status", "pending"),
+                "discovered": (prev or {}).get("discovered", False),
+            })
+            order += 1
+        for leftover in existing.values():
+            leftover["order"] = order
+            merged.append(leftover)
+            order += 1
+        self.learning_trees.update_one(
+            {"_id": key},
+            {"$set": {"student_id": student_id, "course": course, "nodes": merged},
+             "$setOnInsert": {"attempt_log": [], "active_exercise": None, "last_lecture": ""}},
+            upsert=True,
+        )
+
+    def add_learning_node(self, student_id: str, course: str, node: dict):
+        ## discovery: append if absent
+        key = f"{student_id}::{course}"
+        doc = self.learning_trees.find_one({"_id": key}) or {"nodes": []}
+        names = {n["name"] for n in doc.get("nodes", [])}
+        if node["name"] in names:
+            return
+        entry = {"name": node["name"], "type": node.get("type", ""),
+                 "topic": node.get("topic", ""), "order": len(doc.get("nodes", [])),
+                 "mastery": 0, "status": "pending", "discovered": True}
+        self.learning_trees.update_one(
+            {"_id": key}, {"$push": {"nodes": entry}}, upsert=True)
+
+    def update_node_mastery(self, student_id: str, course: str, name: str, mastery: int):
+        self.learning_trees.update_one(
+            {"_id": f"{student_id}::{course}", "nodes.name": name},
+            {"$set": {"nodes.$.mastery": int(mastery),
+                      "nodes.$.status": "mastered" if mastery >= 4 else "in_progress"}})
+
+    def append_attempt(self, student_id: str, course: str, record: dict):
+        ## DKT log: append-only
+        rec = {**record, "timestamp": datetime.datetime.utcnow().isoformat()}
+        self.learning_trees.update_one(
+            {"_id": f"{student_id}::{course}"},
+            {"$push": {"attempt_log": rec}}, upsert=True)
+
+    def set_active_exercise(self, student_id: str, course: str, exercise: dict | None):
+        self.learning_trees.update_one(
+            {"_id": f"{student_id}::{course}"},
+            {"$set": {"active_exercise": exercise}}, upsert=True)
+
+    def set_last_lecture(self, student_id: str, course: str, lecture: str):
+        self.learning_trees.update_one(
+            {"_id": f"{student_id}::{course}"},
+            {"$set": {"last_lecture": lecture[:8096]}}, upsert=True)
+
+    ## course tree cache
+
+    def get_course_tree(self, course: str) -> dict:
+        return self.course_trees.find_one({"_id": course}) or {}
+
+    def put_course_tree(self, course: str, tree: dict):
+        self.course_trees.update_one(
+            {"_id": course},
+            {"$set": {"tree": tree, "built_at": datetime.datetime.utcnow().isoformat()}},
+            upsert=True)

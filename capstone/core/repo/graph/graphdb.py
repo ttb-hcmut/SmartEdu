@@ -5,6 +5,7 @@ from neo4j import GraphDatabase
 from time import time
 
 from core.config import Neo
+from core.util.cypher import concept_pred
 class GraphDB:
     def __init__(self, config: Neo = Neo):
         self.driver = GraphDatabase.driver(config.uri, auth=config.auth)
@@ -123,6 +124,160 @@ class GraphDB:
                         chunk_id=chunk_id, heading=heading, 
                         storage_uri=storage_uri, links=links
                     )
+    def create_tb_indexes(self, db_name: str, dim: int = 768):
+        ## fulltext (lexical) + vector index over :Passage for anchoring
+        ft = "CREATE FULLTEXT INDEX passage_text_index IF NOT EXISTS FOR (n:Passage) ON EACH [n.text]"
+        vec = (f"CREATE VECTOR INDEX passage_vec_index IF NOT EXISTS FOR (n:Passage) ON n.emb "
+               f"OPTIONS {{indexConfig: {{`vector.dimensions`: {dim}, `vector.similarity_function`: 'cosine'}}}}")
+        with self.driver.session(database=db_name) as session:
+            session.run(ft)
+            session.run(vec)
+
+    def write_textbook_tree(self, sections, passages, book_uri, db_name=None, dim: int = 768):
+        ## deterministic write of :Section tree + :Passage units (textbook primitive)
+        db_name = db_name or self.db_name
+        self.create_tb_indexes(db_name, dim)
+        with self.driver.session(database=db_name) as session:
+            session.execute_write(self._write_sections, sections)
+            session.execute_write(self._write_passages, passages, book_uri)
+
+    @staticmethod
+    def _write_sections(tx, sections: List[Dict]):
+        q = """
+        UNWIND $sections AS s
+        MERGE (n:Section {id: s.id})
+        SET n.title=s.title, n.level=s.level, n.p_lo=s.p_num[0], n.p_hi=s.p_num[1], n.order=s.order
+        WITH n, s WHERE s.parent_id IS NOT NULL
+        MATCH (p:Section {id: s.parent_id})
+        MERGE (p)-[:CONTAINS]->(n)
+        """
+        tx.run(q, sections=sections)
+
+    @staticmethod
+    def _write_passages(tx, passages: List[Dict], book_uri: str):
+        q = """
+        UNWIND $passages AS p
+        MERGE (n:Passage {id: p.id})
+        SET n.p_lo=p.p_num[0], n.p_hi=p.p_num[1], n.text=p.text, n.emb=p.emb, n.uri=$uri
+        WITH n, p
+        MATCH (s:Section {id: p.section_id})
+        MERGE (s)-[:HAS_PASSAGE]->(n)
+        """
+        tx.run(q, passages=passages, uri=book_uri)
+
+    def anchor_search(self, emb: List[float], top_k: int = 5, db_name=None) -> List[Dict]:
+        ## top-k passages by vector similarity (anchor target lookup)
+        db_name = db_name or self.db_name
+        q = """
+        CALL db.index.vector.queryNodes('passage_vec_index', $k, $emb) YIELD node, score
+        RETURN node.id AS passage_id, score
+        """
+        return self.run_query(db_name, q, {"k": top_k, "emb": emb})
+
+    def write_anchors(self, links: List[Dict], db_name=None):
+        ## batch concept->passage anchors in one UNWIND MERGE (idempotent)
+        db_name = db_name or self.db_name
+        q = """
+        UNWIND $links AS l
+        MATCH (e:Entity {name: l.entity_name})
+        MATCH (p:Passage {id: l.passage_id})
+        MERGE (e)-[r:ANCHORED_IN]->(p)
+        SET r.score=l.score, r.justification=coalesce(l.justification, '')
+        """
+        with self.driver.session(database=db_name) as session:
+            session.run(q, links=links)
+
+    def get_concept_page(self, name: str, db_name=None) -> Optional[Dict]:
+        ## concept -> best anchored passage -> (minio pdf uri, page)
+        db_name = db_name or self.db_name
+        q = """
+        MATCH (e:Entity)-[r:ANCHORED_IN]->(p:Passage)
+        WHERE toLower(e.name) CONTAINS toLower($name)
+        RETURN p.uri AS uri, p.p_lo AS page, r.score AS score, e.name AS concept
+        ORDER BY r.score DESC LIMIT 1
+        """
+        rows = self.run_query(db_name, q, {"name": name})
+        return rows[0] if rows else None
+
+    def passage_search(self, emb: List[float], query_text: str = "", top_k: int = 5,
+                       db_name=None) -> List[Dict]:
+        ## hybrid textbook retrieval: vector ANN + fulltext, merged by max score
+        db_name = db_name or self.db_name
+        vec_q = """
+        CALL db.index.vector.queryNodes('passage_vec_index', $k, $emb) YIELD node, score
+        RETURN node.id AS id, node.text AS text, node.uri AS uri,
+               node.p_lo AS p_lo, node.p_hi AS p_hi, score
+        """
+        rows = self.run_query(db_name, vec_q, {"k": top_k, "emb": emb})
+        merged = {r["id"]: dict(r) for r in rows}
+        if query_text:
+            ft_q = """
+            CALL db.index.fulltext.queryNodes('passage_text_index', $q) YIELD node, score
+            RETURN node.id AS id, node.text AS text, node.uri AS uri,
+                   node.p_lo AS p_lo, node.p_hi AS p_hi, score
+            LIMIT $k
+            """
+            for r in self.run_query(db_name, ft_q, {"q": query_text, "k": top_k}):
+                cur = merged.get(r["id"])
+                if cur is None or r["score"] > cur["score"]:
+                    merged[r["id"]] = dict(r)
+        out = sorted(merged.values(), key=lambda x: x["score"], reverse=True)
+        return out[:top_k]
+
+    def get_concept_anchors(self, name: str, db_name=None) -> List[Dict]:
+        ## all passages a concept is anchored in (primary + secondary citations)
+        db_name = db_name or self.db_name
+        q = """
+        MATCH (e:Entity)-[r:ANCHORED_IN]->(p:Passage)
+        WHERE toLower(e.name) CONTAINS toLower($name)
+        RETURN e.name AS concept, p.uri AS uri, p.p_lo AS p_lo, p.p_hi AS p_hi,
+               r.score AS score, substring(p.text, 0, 160) AS preview
+        ORDER BY r.score DESC LIMIT 10
+        """
+        return self.run_query(db_name, q, {"name": name})
+
+    def get_passage_context(self, passage_id: str, window: int = 1, db_name=None) -> List[Dict]:
+        ## sibling passages in the same section, page-ordered, around the target
+        db_name = db_name or self.db_name
+        q = """
+        MATCH (s:Section)-[:HAS_PASSAGE]->(target:Passage {id: $pid})
+        MATCH (s)-[:HAS_PASSAGE]->(p:Passage)
+        WITH p, target ORDER BY p.p_lo
+        RETURN p.id AS id, p.p_lo AS p_lo, p.p_hi AS p_hi, p.text AS text,
+               (p.id = target.id) AS is_target
+        """
+        rows = self.run_query(db_name, q, {"pid": passage_id})
+        idx = next((i for i, r in enumerate(rows) if r["is_target"]), None)
+        if idx is None:
+            return rows
+        lo, hi = max(0, idx - window), min(len(rows), idx + window + 1)
+        return rows[lo:hi]
+
+    def get_toc(self, course_hint: str = None, db_name=None) -> List[Dict]:
+        ## authored :Section tree, optionally scoped to a course via passage uri
+        db_name = db_name or self.db_name
+        if course_hint:
+            q = """
+            MATCH (s:Section)-[:HAS_PASSAGE]->(p:Passage)
+            WHERE p.uri STARTS WITH $hint
+            WITH DISTINCT s
+            OPTIONAL MATCH (parent:Section)-[:CONTAINS]->(s)
+            RETURN s.id AS id, s.title AS title, s.level AS level,
+                   s.p_lo AS p_lo, s.p_hi AS p_hi, s.order AS order, parent.id AS parent_id
+            ORDER BY s.level, s.order
+            """
+            params = {"hint": f"{course_hint}/"}
+        else:
+            q = """
+            MATCH (s:Section)
+            OPTIONAL MATCH (parent:Section)-[:CONTAINS]->(s)
+            RETURN s.id AS id, s.title AS title, s.level AS level,
+                   s.p_lo AS p_lo, s.p_hi AS p_hi, s.order AS order, parent.id AS parent_id
+            ORDER BY s.level, s.order
+            """
+            params = {}
+        return self.run_query(db_name, q, params)
+
     def query(self, q = None, param = {}):
         if q == None or len(q) <=3:
             return
@@ -130,10 +285,10 @@ class GraphDB:
         with self.driver.session(database=db_name) as session:
                     session.run(q,param)
 
-    def get_learning_graph(self, student_id: str = None) -> Dict:
-        query = """
+    def get_learning_graph(self, student_id: Optional[str] = None) -> Dict:
+        query = f"""
         MATCH (n:Entity)
-        WHERE n.rrole IS NULL
+        WHERE {concept_pred('n')}
         OPTIONAL MATCH (n)-[r]->(m:Entity)
         WHERE type(r) <> 'CONTENT'
         WITH n, count(r) AS out_degree

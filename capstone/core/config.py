@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from enum import Enum
 import os
 from dotenv import load_dotenv
 
@@ -22,15 +23,45 @@ class App_settings:
 
 # Knowledge Module
 ## Logic Layer
-@dataclass
-class K_conf:
-    profile_name: str = "graph"
+
+class MergeMet(str, Enum):
+    COSINE = "cosine"
+    HYBRID = "hybrid"          # a*cos + b*bert; keep b=0
+
+class MergeStrat(str, Enum):
+    THRESHOLD = "threshold"
+    VALLEY = "valley"          # TextTiling local-minima on smoothed cosine curve
+
+class AnchorIdx(str, Enum):
+    LEXICAL = "lexical"
+    VECTOR = "vector"
+    HYBRID = "hybrid"
 
 @dataclass
 class Ingest_param:
     path: str = "data/"
     PAGE_PER_TB: int = 10
     PAGE_PER_SLIDE: int = 15
+
+    # textbook is primitive anchor, slides/papers updatable
+    textbook_first: bool = True
+    use_section_tree: bool = True
+    semantic_merge: bool = True
+
+    merge_metric: MergeMet = MergeMet.COSINE
+    merge_strategy: MergeStrat = MergeStrat.VALLEY
+    respect_section_boundary: bool = True  
+    merge_threshold: float = 0.6
+    valley_window: int = 2
+    valley_depth: float = 0.1
+    w_cosine: float = 1.0
+    w_bertscore: float = 0.0
+
+    anchor_index: AnchorIdx = AnchorIdx.HYBRID
+    anchor_top_k: int = 5
+    anchor_score_min: float = 0.55          # below -> no anchor
+    anchor_llm_rerank: bool = False         # off: anchoring stays pure retrieval
+    extract_textbook_entities: bool = False  # off: concepts born from teaching, book = pure anchor
 
 ### Infratructure Layer
 @dataclass
@@ -85,7 +116,6 @@ class TA_serv:
     model_type: str = "ta"
 
 
-from enum import Enum
 @dataclass
 class Bloom(Enum):
     """ Bloom's Taxonomy levels """

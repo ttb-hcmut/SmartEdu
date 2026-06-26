@@ -17,10 +17,3 @@ class Embedder:
             outputs = self.model(**inputs)
         embeddings = outputs.last_hidden_state.mean(dim=1)
         return embeddings[0].tolist()
-
-    def get_embeddings(self, texts: List[str]) -> List[List[float]]:
-        inputs = self.tokenizer(texts, return_tensors="pt", padding=True, truncation=True, max_length=512).to(self.device)
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-        embeddings = outputs.last_hidden_state.mean(dim=1)
-        return embeddings.tolist()

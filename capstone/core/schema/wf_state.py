@@ -56,6 +56,9 @@ class AgentState(TypedDict):
     _teach_context: Dict[str, Any]
     # middleware
     current_node: str
+    # roadmap workflow control
+    error: Optional[str]            # set when a node bails out (e.g. empty explore) so END isn't silent
+    roadmap_attempts: int           # explore→evaluate retry counter, capped to bound the loop
 
 
 
