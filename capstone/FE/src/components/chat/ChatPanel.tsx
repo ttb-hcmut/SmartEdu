@@ -16,7 +16,7 @@ interface ChatPanelProps {
 
 export function ChatPanel({ pdfOpen, onUiAction }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([])
-  const { state, result, error, thought, submit, reset } = useChatPoll()
+  const { state, result, error, thought, partial, submit, reset } = useChatPoll()
 
   const handleSubmit = useCallback(
     async (userInput: string) => {
@@ -77,6 +77,7 @@ export function ChatPanel({ pdfOpen, onUiAction }: ChatPanelProps) {
         messages={messages}
         pollState={state}
         thought={thought}
+        partial={partial}
         error={error}
         pdfOpen={pdfOpen}
         onNavigate={handleNavigate}

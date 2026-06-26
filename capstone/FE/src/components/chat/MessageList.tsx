@@ -11,6 +11,7 @@ interface MessageListProps {
   messages: Message[]
   pollState: PollState
   thought: AgentThought | null
+  partial: string
   error: string | null
   pdfOpen: boolean
   onNavigate: (course: string, topic: string, page: number) => void
@@ -21,6 +22,7 @@ export function MessageList({
   messages,
   pollState,
   thought,
+  partial,
   error,
   pdfOpen,
   onNavigate,
@@ -57,9 +59,16 @@ export function MessageList({
         />
       ))}
 
-      {pollState === "polling" && (
-        <ThoughtIndicator thought={thought} />
-      )}
+      {pollState === "polling" &&
+        (partial ? (
+          <MessageBubble
+            message={{ id: "__streaming__", role: "ta", content: partial }}
+            pdfOpen={pdfOpen}
+            onNavigate={onNavigate}
+          />
+        ) : (
+          <ThoughtIndicator thought={thought} />
+        ))}
 
       {(pollState === "fail" || pollState === "timeout") && error && (
         <p
