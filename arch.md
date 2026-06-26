@@ -1,527 +1,404 @@
 ```
-└── Capstone
-    ├── arch.md # This file
-    ├── capstone
-    │   ├── core
-    │   │   ├── api
-    │   │   │   └── life_span.py
-    │   │   ├── config.py
-    │   │   ├── dependencies.py
-    │   │   ├── llm
-    │   │   │   ├── config.py
-    │   │   │   ├── llm_engine.py
-    │   │   │   └── prompt
-    │   │   │       ├── agents.py
-    │   │   │       └── graph.py
-    │   │   ├── model
-    │   │   │   └── embedding.py
-    │   │   ├── repo
-    │   │   │   ├── docker-compose.yaml
-    │   │   │   ├── graph
-    │   │   │   │   ├── graphdb.py
-    │   │   │   │   ├── insert.py
-    │   │   │   │   ├── neo4j.yaml
-    │   │   │   │   └── utils
-    │   │   │   ├── milvus_db
-    │   │   │   │   ├── etcd_data
-    │   │   │   │   ├── mil.py
-    │   │   │   │   └── milvus.yml
-    │   │   │   ├── nosql
-    │   │   │   │   ├── mongo_db.py
-    │   │   │   │   └── mongo.yml
-    │   │   │   ├── sql
-    │   │   │   │   ├── mysql.yml
-    │   │   │   │   └── sql_db.py
-    │   │   │   ├── storage
-    │   │   │   │   └── minio_repo.py
-    │   │   │   └── util
-    │   │   │       ├── __init__.py
-    │   │   │       └── dbgate.yml
-    │   │   ├── schema
-    │   │   │   ├── factory.py
-    │   │   │   ├── graph
-    │   │   │   │   ├── __init__.py
-    │   │   │   │   ├── graph.py
-    │   │   │   │   ├── ontology.py
-    │   │   │   │   └── type.py
-    │   │   │   └── wf_state.py
-    │   │   └── util
-    │   │       └── file_extractor.py
-    │   ├── knowledge
-    │   │   ├── api
-    │   │   │   ├── health.py
-    │   │   │   └── route.py
-    │   │   ├── engine
-    │   │   │   ├── __init__.py
-    │   │   │   ├── extract.py
-    │   │   │   ├── graph
-    │   │   │   │   ├── graph_constructor.py
-    │   │   │   │   ├── helper
-    │   │   │   │   │   ├── analyzer.py
-    │   │   │   │   │   ├── normalize.py
-    │   │   │   │   │   └── taxonomy.py
-    │   │   │   │   ├── prompt.py
-    │   │   │   │   ├── template.html
-    │   │   │   │   └── visualize_kg.py
-    │   │   │   └── subjects.csv
-    │   │   ├── knowledge_construction_service.py
-    │   │   └── service
-    │   │       └── course_ingest.py
-    │   ├── main.py
-    │   ├── README.md
-    │   ├── run_test.py
-    │   ├── student
-    │   │   ├── api.py
-    │   │   ├── auth.py
-    │   │   ├── memo.py
-    │   │   ├── session_context.py
-    │   │   └── Student_Tracker.py
-    │   ├── subjects.csv
-    │   ├── TA
-    │   │   ├── agent
-    │   │   │   ├── base.py
-    │   │   │   ├── injector.py
-    │   │   │   ├── middleware.py
-    │   │   │   └── ollama_patch.py
-    │   │   ├── api
-    │   │   │   └── route.py
-    │   │   ├── edu
-    │   │   │   ├── helper
-    │   │   │   │   ├── context.py
-    │   │   │   │   ├── few_shot.py
-    │   │   │   │   ├── prompt.py
-    │   │   │   │   ├── schema.py
-    │   │   │   │   ├── sync_prompts.py
-    │   │   │   │   └── utils.py
-    │   │   │   ├── smart_edu.py
-    │   │   │   └── workflow
-    │   │   │       ├── retrieve.py
-    │   │   │       ├── roadmap.py
-    │   │   │       └── teach.py
-    │   │   ├── ta_module.py
-    │   │   ├── tools
-    │   │   │   ├── context_tools.py
-    │   │   │   ├── factory.py
-    │   │   │   ├── minio
-    │   │   │   │   └── pdf_tools.py
-    │   │   │   ├── neo
-    │   │   │   │   ├── __init__.py
-    │   │   │   │   ├── base.py
-    │   │   │   │   ├── explore.py
-    │   │   │   │   ├── retriever.py
-    │   │   │   │   └── schema.py
-    │   │   │   └── student
-    │   │   │       └── base.py
-    │   │   └── tracing
-    │   │       ├── __init__.py
-    │   │       ├── prompt_sync.py
-    │   │       ├── schema.py
-    │   │       ├── tracer.py
-    │   │       └── writer.py
-    │   ├── test_minio.py
-    │   └── test_mongo.py
-    ├── docs
-    │   ├── description
-    │   │   ├── implementation_plan.md
-    │   │   ├── README.md
-    │   │   └── walkthrough.md
-    │   ├── draw
-    │   │   └── Draw.excalidraw
-    │   ├── latex
-    │   │   ├── Contents
-    │   │   │   ├── 01_Introduction.tex
-    │   │   │   ├── 02_Fundamental extra.tex
-    │   │   │   ├── 02_Fundamental.tex
-    │   │   │   ├── 03_requirements.tex
-    │   │   │   ├── 04_Proposal.tex
-    │   │   │   ├── 05_System.tex
-    │   │   │   ├── 06_Experiments.tex
-    │   │   │   └── 07_Eval.tex
-    │   │   ├── Images
-    │   │   │   ├── ex
-    │   │   │   │   ├── ai_mess.png
-    │   │   │   │   ├── app_run.png
-    │   │   │   │   ├── asynch_ingest.png
-    │   │   │   │   ├── dbgate.png
-    │   │   │   │   ├── docker.png
-    │   │   │   │   ├── full_TA_output_1.png
-    │   │   │   │   ├── graph.png
-    │   │   │   │   ├── login.png
-    │   │   │   │   ├── neo.png
-    │   │   │   │   ├── node.png
-    │   │   │   │   ├── pedia_err.png
-    │   │   │   │   ├── recommend_ml.png
-    │   │   │   │   └── tool_mess.png
-    │   │   │   ├── fundamental
-    │   │   │   │   ├── agent.png
-    │   │   │   │   ├── bayes.png
-    │   │   │   │   ├── cloud_local_llm.png
-    │   │   │   │   ├── embedding.png
-    │   │   │   │   ├── lstm.png
-    │   │   │   │   ├── micro.png
-    │   │   │   │   ├── react.png
-    │   │   │   │   └── snn.png
-    │   │   │   ├── hcmut.png
-    │   │   │   ├── method
-    │   │   │   │   ├── adaptive_middleware.png
-    │   │   │   │   ├── agent_design.jpg
-    │   │   │   │   ├── agent_design.png
-    │   │   │   │   ├── full_pipe.png
-    │   │   │   │   ├── g_extract.png
-    │   │   │   │   ├── lang_mid.png
-    │   │   │   │   ├── node_create.png
-    │   │   │   │   └── pipeline.png
-    │   │   │   ├── relate
-    │   │   │   │   ├── dkg.png
-    │   │   │   │   ├── edc.png
-    │   │   │   │   ├── edukg.png
-    │   │   │   │   ├── graphrag hybrid.png
-    │   │   │   │   └── kggen.png
-    │   │   │   └── system
-    │   │   │       ├── AI
-    │   │   │       │   └── ollama.png
-    │   │   │       ├── backend
-    │   │   │       │   ├── fastapi.png
-    │   │   │       │   └── uv.png
-    │   │   │       ├── database
-    │   │   │       │   ├── mil.png
-    │   │   │       │   ├── mongodb.png
-    │   │   │       │   └── sqlite.png
-    │   │   │       ├── filestorage
-    │   │   │       │   └── minio.jpg
-    │   │   │       ├── frontend
-    │   │   │       │   └── react.png
-    │   │   │       ├── lang_mid_logo.png
-    │   │   │       ├── lang_mid.jpg
-    │   │   │       ├── langchain_node.png
-    │   │   │       └── S2666920X2500013X.bib
-    │   │   ├── Intro
-    │   │   │   ├── LoiCamDoan.tex
-    │   │   │   ├── LoiCamOn.tex
-    │   │   │   └── TomTat.tex
-    │   │   ├── main.pdf
-    │   │   ├── main.tex
-    │   │   ├── Outro
-    │   │   │   ├── citation-389497305.bib
-    │   │   │   ├── Image.tex
-    │   │   │   └── Supplement.tex
-    │   │   ├── References.bib
-    │   │   ├── script.sh
-    │   │   └── table
-    │   │       ├── chap2
-    │   │       │   ├── edu_sys.tex
-    │   │       │   └── frameworks.tex
-    │   │       ├── chap3
-    │   │       ├── chap4
-    │   │       │   ├── wf_1.tex
-    │   │       │   ├── wf_2.tex
-    │   │       │   ├── wf_3.tex
-    │   │       │   └── wf.tex
-    │   │       └── chap5
-    │   │           ├── config.tex
-    │   │           ├── ingestion.tex
-    │   │           ├── lifespan.tex
-    │   │           ├── llms.tex
-    │   │           ├── pipeline.tex
-    │   │           └── sys_arch.tex
-    │   ├── Ref
-    │   │   ├── AEMA_agentic_eval.pdf
-    │   │   ├── ai_4_CS50.pdf
-    │   │   ├── AI_in_Edu.pdf
-    │   │   ├── Course
-    │   │   │   ├── 1_Prerequisite Extraction.pdf
-    │   │   │   ├── 2_ LDA course extract.pdf
-    │   │   │   ├── 3_ LLM based Pre extraction.pdf
-    │   │   │   └── pre_summary.pdf
-    │   │   ├── KG
-    │   │   │   ├── Algo
-    │   │   │   │   ├── 1_reasoning_and_graph.pdf
-    │   │   │   │   ├── 2_KG_init.pdf
-    │   │   │   │   ├── DKG_Comm.pdf
-    │   │   │   │   └── Leiden for Comm.pdf
-    │   │   │   ├── EduKG
-    │   │   │   │   ├── eduKG.pdf
-    │   │   │   │   ├── EduKGPipeline.pdf
-    │   │   │   │   └── MeduKG.pdf
-    │   │   │   ├── KG_Oppo_challenges.pdf
-    │   │   │   └── KG_reasoning
-    │   │   │       ├── kg_guide4QA.pdf
-    │   │   │       └── KGQA.pdf
-    │   │   ├── llm_in_edu.pdf
-    │   │   ├── open_source_isue.pdf
-    │   │   ├── semantic_collapse.pdf
-    │   │   └── Technical
-    │   │       ├── 2411.18241v1.pdf
-    │   │       ├── ICRAAI26_SolyUpadtedv3.pdf.pdf
-    │   │       ├── LangGraph V1 Essentials.pdf
-    │   │       └── Qwen rep.pdf
-    │   └── slides
-    │       ├── Adaptive Agent System for Self-Learning and Course Navigation.pdf
-    │       └── Roadmap For EduAgent.pdf
-    ├── FE
-    ├── FE-task.md
-    ├── main.py
-    ├── pyproject.toml
+└── Capstone/
+    ├── arch.md                             # This file — architecture reference
+    ├── design.md                           # High-level design decisions & system diagrams
+    ├── HANDOFF.md
+    ├── FE.md
     ├── README.md
-    └── script.sh
-
+    ├── pyproject.toml
+    ├── uv.lock
+    ├── script.sh
+    ├── docs/
+    │   ├── Ref/
+    │   ├── description/
+    │   ├── draw/
+    │   ├── latex/
+    │   ├── slides/
+    │   └── superpowers/
+    └── capstone/
+        ├── main.py                         # FastAPI app entry-point — mounts all routers
+        ├── run_test.py
+        ├── subjects.csv
+        ├── README.md
+        │
+        ├── core/
+        │   ├── .env                        # Runtime secrets / DB credentials (git-ignored)
+        │   ├── .env.example
+        │   ├── config.py                   # All global settings (DB hosts, LLM params, Bloom's taxonomy)
+        │   ├── dependencies.py             # FastAPI dependency-injection helpers
+        │   ├── api/
+        │   │   └── life_span.py            # App lifespan — init/teardown all DB & LLM clients
+        │   ├── llm/
+        │   │   ├── config.py
+        │   │   ├── llm_engine.py           # Central LLM factory — spawns & caches ChatOllama instances
+        │   │   └── prompt/
+        │   │       ├── agents.py
+        │   │       └── graph.py
+        │   ├── model/
+        │   │   └── embedding.py
+        │   ├── repo/
+        │   │   ├── docker-compose.yaml     # Compose file for Neo4j, Milvus, Mongo, MinIO, MySQL
+        │   │   ├── graph/
+        │   │   │   ├── graphdb.py          # Neo4j client — Cypher queries, mastery, textbook tree/passage/anchor writes & reads
+        │   │   │   ├── insert.py
+        │   │   │   ├── neo4j.yaml
+        │   │   │   ├── data/
+        │   │   │   ├── import/
+        │   │   │   ├── logs/
+        │   │   │   ├── plugins/
+        │   │   │   ├── test/
+        │   │   │   └── utils/
+        │   │   ├── milvus_db/
+        │   │   │   ├── mil.py              # Milvus client — collection setup, vector insert, top-K search
+        │   │   │   ├── milvus.yml
+        │   │   │   └── etcd_data
+        │   │   ├── nosql/
+        │   │   │   ├── mongo_db.py         # MongoDB client — chat history, session state, memo storage
+        │   │   │   └── mongo.yml
+        │   │   ├── sql/
+        │   │   │   ├── sql_db.py
+        │   │   │   ├── mysql.yml
+        │   │   │   └── student.db
+        │   │   ├── storage/
+        │   │   │   └── minio_repo.py       # MinIO client — PDF/slide upload & chunk storage
+        │   │   └── util/
+        │   │       ├── __init__.py
+        │   │       └── dbgate.yml
+        │   ├── schema/
+        │   │   ├── factory.py
+        │   │   ├── wf_state.py             # LangGraph state types (AgentState, StudentState, etc.)
+        │   │   └── graph/
+        │   │       ├── __init__.py
+        │   │       ├── graph.py
+        │   │       ├── ontology.py
+        │   │       └── type.py
+        │   └── util/
+        │       ├── file_extractor.py       # Docling PDF → markdown chunks (extract_pdf) + authored section tree (extract_tree)
+        │       └── cypher.py               # concept_pred() — single source of truth for the concept-entity gate
+        │
+        ├── knowledge/
+        │   ├── knowledge_construction_service.py
+        │   ├── api/
+        │   │   ├── route.py
+        │   │   └── health.py
+        │   ├── engine/
+        │   │   ├── extract.py              # GraphExtractionService — LLM-driven concept/relation extraction
+        │   │   ├── subjects.csv
+        │   │   └── graph/
+        │   │       ├── graph_constructor.py  # KG_Handler — assembles the final Knowledge Graph
+        │   │       ├── prompt.py
+        │   │       ├── visualize_kg.py
+        │   │       ├── template.html
+        │   │       └── helper/
+        │   │           ├── analyzer.py
+        │   │           ├── normalize.py
+        │   │           ├── semantic_merge.py # group_passages() — adjacent docling items → :Passage units (cosine valley cuts)
+        │   │           └── taxonomy.py
+        │   └── service/
+        │       ├── course_ingest.py        # CourseIngestionService — end-to-end pipeline orchestrator
+        │       └── pdf_loader.py
+        │
+        ├── student/
+        │   ├── api.py                      # /register, /login, /session/start, /session/end
+        │   ├── auth.py
+        │   ├── Student_Tracker.py          # In-memory + DB learning state tracker
+        │   ├── memo.py
+        │   └── session_context.py
+        │
+        ├── TA/
+        │   ├── ta_module.py                # Top-level chat orchestrator & trace manager
+        │   ├── agent/
+        │   │   ├── base.py
+        │   │   ├── injector.py
+        │   │   ├── middleware.py           # NodeSchemaMiddleware — dynamic output schema switcher
+        │   │   └── ollama_patch.py
+        │   ├── api/
+        │   │   └── route.py
+        │   ├── edu/
+        │   │   ├── smart_edu.py            # Compiles & runs the main LangGraph StateGraph (router + all sub-graphs)
+        │   │   ├── helper/
+        │   │   │   ├── context.py
+        │   │   │   ├── few_shot.py
+        │   │   │   ├── prompt.py           # All TA workflow prompt templates
+        │   │   │   ├── schema.py           # Structured output schemas per workflow node
+        │   │   │   ├── sync_prompts.py
+        │   │   │   └── utils.py
+        │   │   └── workflow/
+        │   │       ├── retrieve.py         # RAG sub-graph (rag_core → deep_decision → rag_deep)
+        │   │       ├── roadmap.py          # Learning-path generation sub-graph
+        │   │       └── teach.py            # Lesson delivery sub-graph (lecture / quiz / evaluate)
+        │   ├── tools/
+        │   │   ├── factory.py             # ToolFactory — binds RAG / TA tool sets per agent
+        │   │   ├── tool_config.py
+        │   │   ├── neo/
+        │   │   │   ├── __init__.py
+        │   │   │   ├── base.py
+        │   │   │   ├── explore.py
+        │   │   │   ├── retriever.py
+        │   │   │   ├── course_tree.py      # CourseTree — course backbone (centrality today; authored :Section tree planned)
+        │   │   │   └── schema.py
+        │   │   ├── minio/
+        │   │   │   └── pdf_tools.py        # GetConcept (→ get_concept_page), GetPages, FEToPage
+        │   │   └── student/
+        │   │       ├── base.py
+        │   │       └── context_tools.py    # recall_tool_results / recall_thoughts / inspect_chat_history
+        │   └── tracing/
+        │       ├── __init__.py
+        │       ├── .env
+        │       ├── tracer.py
+        │       ├── prompt_sync.py
+        │       ├── schema.py
+        │       └── writer.py
+        │
+        ├── FE/
+        │   ├── package.json
+        │   ├── next.config.ts
+        │   ├── tsconfig.json
+        │   ├── components.json
+        │   └── src/
+        │       ├── proxy.ts
+        │       ├── app/
+        │       │   ├── layout.tsx
+        │       │   ├── page.tsx
+        │       │   ├── globals.css
+        │       │   ├── login/page.tsx
+        │       │   ├── register/page.tsx
+        │       │   ├── chat/page.tsx
+        │       │   ├── settings/page.tsx
+        │       │   ├── admin/ingest/page.tsx
+        │       │   └── api/
+        │       │       ├── auth/
+        │       │       └── profile/
+        │       ├── components/
+        │       │   ├── auth/
+        │       │   │   ├── AuthFrame.tsx
+        │       │   │   ├── LoginForm.tsx
+        │       │   │   └── RegisterForm.tsx
+        │       │   ├── chat/
+        │       │   │   ├── ChatPanel.tsx
+        │       │   │   ├── MessageBubble.tsx
+        │       │   │   ├── MessageInput.tsx
+        │       │   │   ├── MessageList.tsx
+        │       │   │   ├── SlideChip.tsx
+        │       │   │   └── ThoughtIndicator.tsx
+        │       │   ├── ingest/
+        │       │   │   ├── IngestForm.tsx
+        │       │   │   ├── FileDropzone.tsx
+        │       │   │   └── UploadProgress.tsx
+        │       │   ├── layout/
+        │       │   │   ├── AppShell.tsx
+        │       │   │   ├── Sidebar.tsx
+        │       │   │   └── TopBar.tsx
+        │       │   ├── pdf/
+        │       │   │   ├── PDFViewer.tsx
+        │       │   │   └── PDFSkeleton.tsx
+        │       │   └── ui/
+        │       │       ├── button.tsx
+        │       │       ├── input.tsx
+        │       │       ├── badge.tsx
+        │       │       ├── skeleton.tsx
+        │       │       ├── spinner.tsx
+        │       │       └── sonner.tsx
+        │       ├── contexts/
+        │       │   ├── AuthContext.tsx     # Global auth state (token, user)
+        │       │   └── SessionManager.tsx
+        │       ├── hooks/
+        │       │   ├── useChatPoll.ts      # Long-poll hook for streaming chat responses
+        │       │   └── useSession.ts
+        │       └── lib/
+        │           ├── api.ts              # Typed API client — all backend calls
+        │           ├── normalise.ts
+        │           └── utils.ts
+        │
+        ├── data/
+        │   ├── Linear Algebra/
+        │   ├── ML/
+        │   └── Nature Language Processing/
+        │
+        └── test/
+            ├── __init__.py
+            ├── TA/
+            │   ├── TA_v0_015856_2005.json
+            │   ├── TA_v0_223818_2305.json
+            │   ├── TA_v0_v0_1720_1704.json
+            │   ├── errors/
+            │   └── logs/
+            ├── db/
+            │   ├── test_minio.py
+            │   └── test_mongo.py
+            ├── graph_const/
+            │   ├── kg.json
+            │   ├── kg_new.json
+            │   ├── kg_dashboard.html
+            │   ├── graph_lit_*.json
+            │   └── log.txt
+            └── test_script/
+                ├── __init__.py
+                ├── TA/
+                │   ├── question.py
+                │   ├── test_context_smoke.py   # acceptance gate — N-turn session, no overflow + history continuity
+                │   ├── test_concurrency.py
+                │   ├── test_reset.py
+                │   ├── tools.py
+                │   ├── wf_utils.py
+                │   ├── recommendation.py
+                │   └── roadmap/
+                ├── knowledge/
+                │   ├── ingestion.py
+                │   └── extract_pdf.py
+                └── functions_legacy/
 ```
 
 ---
 
 ## Project Overview
 
-The SmartEdu platform is structured into four primary modules, each serving a distinct architectural role in facilitating course ingestion, tracking student states, and driving interactive, personalized AI tutoring sessions:
-
-1. **`core`**: Contains shared configuration schemas, database connection interfaces (SQL, NoSQL, Graph, Vector, Object Storage), dynamic LLM wrappers, and global utilities used across the entire ecosystem.
-2. **`knowledge`**: Implements the pipeline for course material ingestion. It extracts structured semantic concepts and taxonomical relationships from slides and textbooks to build the system's foundational Knowledge Graph.
-3. **`student`**: Manages user accounts, authentication (JWT), chat session lifecycles, and maintains an in-memory & persisted learning history including mastery levels, active progress, and recent navigation.
-4. **`TA`**: Orchestrates the multi-turn conversational LangGraph workflow. It hosts the Smart Tutor agents, query router, retrieval workflows (RAG), customized learning path generators (Roadmaps), and active tutoring stages.
-5. **`FE`**: Landing pages of the system, a Front End that sends request to backend. Technology used 
----
-
-## Detailed Architecture
-
-## 1. Core Module (`core/`)
-*Common services, configuration systems, data schemas, and shared database clients.*
-
-### `core/api/life_span.py`
-Manages the application lifecycle events, including initializing and tearing down database engines (Neo4j, Milvus, Mongo, MinIO, MySQL) and global LLM configurations at startup and shutdown.
-- **Functions**:
-  - `lifespan`: Standard FastAPI event handler to initialize and tear down global database engines and LLM clients at application startup and shutdown.
-
-### `core/config.py`
-Defines the global environment configurations, database connection parameters (hosts, ports, credentials), and standard settings for Milvus, MongoDB, Neo4j, MinIO, MySQL, and Bloom's Taxonomy values.
-- **Classes**:
-  - `App_settings`: App metadata and route endpoints.
-  - `K_conf`: Ingestion profiles.
-  - `Ingest_param`: PDF ingestion paging metrics.
-  - `Mil_conf` / `Emb_conf` / `Neo` / `Minio_conf` / `Mongo_conf`: Repository credentials.
-  - `TA_conf` / `TA_serv`: TA agent configuration profiles.
-
-### `core/dependencies.py`
-Exposes dependency injection helper methods for FastAPI controllers, enabling dynamic retrieval and scoped management of KnowledgeModule, TAModule, and IngestionService instances.
-- **Functions**:
-  - `get_knowledge_module`: Retrieves the initialized KnowledgeModule instance from the FastAPI app state.
-  - `get_ingestion_service`: Resolves the active CourseIngestionService instance.
-  - `get_TA_module`: Resolves the initialized TAModule instance.
-
-### `core/llm/config.py`
-Defines hyperparameter profiles and active settings (model name, temperature, context length, keep-alive windows) for the different LLM agents (RAG, TA, Evaluator, Worker, Graph).
-- **Classes**:
-  - `LLMProfile`: Structured dataclass capturing individual model params.
-  - `LLMConfig`: Pool mapping agent nicknames to their respective target profiles.
-
-### `core/llm/llm_engine.py`
-Acts as the central factory engine to initialize, instantiate, and cache LangChain ChatOllama connections based on LLMConfig profiles.
-- **Classes & Methods**:
-  - `CoreLLMEngine`: Holds instances of various models, dynamically spawning Ollama connectors with retry safety.
-
-### `core/model/embedding.py`
-Provides a unified embedding wrapper utilizing HuggingFace transformers (e.g., SciBERT) to generate numerical vectors for course topics and text chunks.
-- **Classes & Methods**:
-  - `Embedder`: Formulates embedding extraction loops and manages vector dims.
-
-### `core/repo/graph/graphdb.py`
-Interacts with the Neo4j instance to handle Cypher query execution, student mastery progress, and graph structure retrieval.
-- **Classes & Methods**:
-  - `GraphDB`: Establishes connections to Neo4j, retrieves learning path topologies, updates mastery ratings, and resets database nodes.
-
-### `core/repo/graph/insert.py`
-Contains serialization utilities to convert Knowledge Graph objects and dependencies into formatted dict collections suitable for Neo4j transactional loading.
-- **Functions**:
-  - `serialize_kg_to_dict`: Maps KG_Instance structures into clean list collections of nodes, edges, and clusters.
-
-### `core/repo/milvus_db/mil.py`
-Manages the vector database storage client (Milvus), supporting collection construction, vector embedding inserts, and semantic similarity search queries.
-- **Classes & Methods**:
-  - `MilvusDB`: Connects to Milvus, constructs collection schemas, inserts concept vectors, and queries top-K matching nodes.
-
-### `core/repo/nosql/mongo_db.py`
-Implements the MongoDB client wrapper to store unstructured learning histories, chat context memos, and student session states.
-- **Classes & Methods**:
-  - `Mongo_DB`: Coordinates connections, retrieves session documents, appends logs to chat history, and updates active learning positions.
-
-### `core/repo/sql/sql_db.py`
-Manages the relational SQL database connection (MySQL/SQLite) using SQLAlchemy to handle structured account authentication and student profiles.
-- **Classes & Methods**:
-  - `SQL_DB`: Establishes DB pools, handles user password verification, and executes registration queries.
-
-### `core/repo/storage/minio_repo.py`
-Interfaces with MinIO object storage to organize, store, and stream course material PDFs, lecture slides, and parsed textbook chunks.
-- **Classes & Methods**:
-  - `MinioDB`: Establishes bucket connections, uploads whole PDF documents, and saves chunk text structures.
-
-### `core/schema/factory.py`
-Declares the standardized Pydantic data schemas representing text extractions, slide concept bundles, and textbook-to-anchor links.
-- **Classes**:
-  - `RhetoricalItem`: Standard structure capturing statement roles and exact texts.
-  - `ConceptBundle`: Maps slide concept names to their rhetorical contexts.
-  - `SkeletonStructure`: Phase 1 slide parsing skeleton containing extracted concepts.
-  - `RelationStructure`: Phase 2 slide parsing model identifying concept-to-concept relations.
-  - `AnchorLinkStructure`: Matches textbook segments to related slide anchors.
-
-### `core/schema/graph/graph.py`
-Defines the base schemas representing clusters and graph instances of the Knowledge Graph system.
-- **Classes**:
-  - `Cluster`: Leiden or semantic cluster container holding node ID members.
-  - `KG_Instance`: Consolidated container representing the mapped nodes, edges, and clusters.
-
-### `core/schema/graph/ontology.py`
-Represents the structural ontology of the educational Knowledge Graph, enforcing typed nodes (Topic, Community, Concept, Rhetorical) and edges.
-- **Classes**:
-  - `TopicNode` / `CommunityNode` / `ConceptNode` / `RhetoricalNode`: Node schemas inheriting from BaseNode.
-  - `EduEdge`: Ontology structure mapping source-to-target nodes.
-
-### `core/schema/graph/type.py`
-Stores standard base models, reference structures, and type enumerations utilized throughout the graph schema.
-- **Classes & Enums**:
-  - `Ref`: Direct reference pointers identifying external storage blocks.
-  - `BaseNode`: Structural base class for graph objects.
-  - `RhetoricalRole`: Enumerates logical roles (Formula, Proof, Statement, quiz).
-  - `NodeType` / `EdgeType`: Ontology classifications.
-
-### `core/schema/wf_state.py`
-Defines the state objects, payload dictionaries, and message collections tracked inside the LangGraph workflows.
-- **Classes**:
-  - `ConceptNode`: Simplified concept representations with Bloom's mastery tracking.
-  - `LearningProposal`: Structured recommendation details.
-  - `StudentState`: Typed dictionary mapping current sessions, history lists, and masteries.
-  - `AgentState`: Unified state wrapper representing active chats, intents, and worker outputs.
-
-### `core/util/file_extractor.py`
-Implements the core document parsing pipeline using Docling, converting PDF pages into clean markdown sections and window-overlapping text blocks.
-- **Functions**:
-  - `extract_pdf`: Processes target documents, strips headers, and batches pages.
-  - `create_refs`: Maps batch chunks into verifiable storage references.
+| Module | Role |
+|---|---|
+| `core` | Shared infrastructure — DB clients, LLM factory, schemas, config |
+| `knowledge` | Course ingestion pipeline — PDF parsing → concept extraction → KG construction |
+| `student` | Identity, JWT auth, session lifecycle, learning-state tracking |
+| `TA` | LangGraph multi-agent tutor — RAG retrieval, roadmap generation, lesson delivery |
+| `FE` | Next.js 14 front-end — chat UI, admin ingestion panel, auth pages |
 
 ---
 
-## 2. Knowledge Ingestion Module (`knowledge/`)
-*Automated parsing of educational documents and generation of semantic graphs.*
+## 1. Core (`core/`)
 
-### `knowledge/api/route.py`
-Exposes REST endpoints to trigger and monitor course ingestion tasks in the background.
-- **Endpoints**:
-  - `POST /ingest-course`: Enqueues an ingestion request, validates the presence of uploaded PDFs, and triggers background processing.
-
-### `knowledge/engine/extract.py`
-Uses the LLM engine to clean slide headers, extract concept skeletons, link concepts, and trace textbook-to-KG semantic relationships.
-- **Classes & Methods**:
-  - `GraphExtractionService`: Controls extraction phases, using prompting layers to synthesize concepts and relationships.
-
-### `knowledge/engine/graph/graph_constructor.py`
-Parses extraction phase structures, builds graph instances, resolves reference models, and exports the final Knowledge Graph.
-- **Classes & Methods**:
-  - `KG_Handler`: Accumulates extracted concepts and edges into serialized Knowledge Graph lists.
-
-### `knowledge/service/course_ingest.py`
-Coordinates the complete course loading pipeline by verifying PDFs, triggering file extractors, launching LLM mappings, and writing results to databases.
-- **Classes & Methods**:
-  - `CourseIngestionService`: The pipeline orchestrator driving course imports.
-
-### `knowledge/knowledge_construction_service.py`
-Exposes the entrypoint facade wrapper representing the ingestion module, managing core resource cleanup.
-- **Classes & Methods**:
-  - `KnowledgeModule`: Handles component initialization and provides access to CourseIngestionService.
+- **`config.py`** — single source of truth for all environment settings (DB hosts, ports, credentials, Bloom's taxonomy values).
+- **`dependencies.py`** — FastAPI DI helpers; every route gets typed module instances with zero boilerplate.
+- **`api/life_span.py`** — initialises all DB engines and the global LLM client at startup; tears them down on shutdown.
+- **`llm/llm_engine.py`** — spawns and caches `ChatOllama` connections per agent profile.
+- **`repo/docker-compose.yaml`** — single compose file that brings up Neo4j, Milvus, MongoDB, MinIO, and MySQL.
+- **`repo/graph/graphdb.py`** — Neo4j client; Cypher execution, mastery score updates, graph topology queries.
+- **`repo/milvus_db/mil.py`** — Milvus client; collection management, embedding insert, top-K similarity search.
+- **`repo/nosql/mongo_db.py`** — MongoDB client; chat history logs, session memos, student state snapshots.
+- **`repo/storage/minio_repo.py`** — MinIO client; PDF upload, chunk text storage, page retrieval.
+- **`schema/wf_state.py`** — defines `AgentState`, `StudentState`, `ConceptNode`, `LearningProposal` — the typed dicts that flow through every LangGraph node.
+- **`util/file_extractor.py`** — converts PDFs → clean markdown sections using Docling, then batches into overlapping chunk windows.
 
 ---
 
-## 3. Student Management Module (`student/`)
-*Identity verification, chat session registration, and persistent tracking of learner progress.*
+## 2. Knowledge (`knowledge/`)
 
-### `student/api.py`
-Exposes user-facing endpoints to register student accounts, process credentials, and start or end chat sessions.
-- **Endpoints**:
-  - `POST /register`: Registers new student profiles, hashes credentials, and allocates a default state document.
-  - `POST /login`: Validates credentials and generates a secure authentication payload.
-  - `POST /session/start` & `DELETE /session/end`: Generates and discards session-specific UUID tokens to cleanly isolate chat sessions.
+- **`engine/extract.py`** — `GraphExtractionService`; multi-phase LLM pipeline: header cleaning → skeleton extraction → relation extraction → textbook anchor linking.
+- **`engine/graph/graph_constructor.py`** — `KG_Handler`; accumulates per-slide results into the final `KG_Instance` ready for Neo4j/Milvus.
+- **`engine/graph/helper/semantic_merge.py`** — `group_passages()`; merges adjacent docling items into `:Passage` units via cosine valley cuts, capped at section boundaries.
+- **`service/course_ingest.py`** — `CourseIngestionService`; textbook-first orchestrator: ingest textbook as the anchor substrate (`:Section` tree + `:Passage` units, no LLM) → extract concepts from slides → anchor concepts into passages by batched vector ANN.
 
-### `student/auth.py`
-Handles token creation, claim processing, and user validation using secure JWT encryption.
-- **Functions**:
-  - `create_access_token`: Generates secure JWT access tokens.
-  - `get_current_student`: FastAPI dependency that decodes JWT claims and validates caller identity.
-
-### `student/Student_Tracker.py`
-Orchestrates active learning states, mastery levels, visited resources, and synchronization between database providers.
-- **Classes & Methods**:
-  - `Student_Tracker`: Coordinates high-level state operations, tracks in-memory sessions, maps active lesson steps, advances learned concepts, updates Neo4j progress graphs, and synchronizes persistent student history with MongoDB.
-
-### `student/memo.py`
-Provides helper classes to cache, summarize, and format chat history turns as an injection context for LLM agents.
-- **Classes & Methods**:
-  - `Memo`: Caches and formats the sliding conversation window history (skim vs. full mode) to supply context to the LLMs.
+See [§7. Textbook-anchor substrate](#7-textbook-anchor-substrate) for the graph schema.
 
 ---
 
-## 4. Teaching Assistant Module (`TA/`)
-*The LangGraph-powered AI tutor orchestrating multi-agent reasoning and step-by-step education.*
+## 3. Student (`student/`)
 
-### `TA/ta_module.py`
-Coordinates the top-level orchestration of tutor dialogue iterations, trace buffers, and callback telemetry.
-- **Classes & Methods**:
-  - `TAModule`: High-level entrypoint that handles chat inputs, initializes state logs, launches the `SmartEdu` engine execution, and serializes trace histories.
+- **`api.py`** — `/register`, `/login`, `/session/start`, `/session/end` endpoints.
+- **`Student_Tracker.py`** — in-memory mastery tracker; syncs concept progress to Neo4j and chat history to MongoDB on each turn.
+- **`session_context.py`** — manages the per-session context object (active course, current node, recent path) injected into every workflow call.
 
-### `TA/agent/injector.py`
-Spawns and configures LangChain agent executor pipelines with structural middlewares and tool schemas.
-- **Classes & Methods**:
-  - `AgentInjector`: Spawns Ollama connectors and configures `NodeSchemaMiddleware` schema-mapping tools.
+---
 
-### `TA/agent/middleware.py`
-Interceptors to dynamically validate and map different validation schemas inside active multi-intent agent runs.
-- **Classes & Methods**:
-  - `NodeSchemaMiddleware`: A custom interceptor that switches the target structured response validation schema (e.g., `RAGCore`, `RAGDeep`, `RoadmapExplore`) based on the active LangGraph node.
+## 4. Teaching Assistant (`TA/`)
 
-### `TA/agent/ollama_patch.py`
-Applies structural fixes and formatting updates to Ollama JSON schema parser classes.
-- **Functions**:
-  - Patches LangChain Ollama client schemas to ensure native structured JSON output formatting.
+- **`ta_module.py`** — top-level entry; receives user message, builds `AgentState`, runs `SmartEdu`, serialises trace. Injects **windowed** history (`recent_turns`), reuses the route `chat_id` end-to-end, LRU-bounds the per-session tracer cache.
+- **`edu/smart_edu.py`** — compiles the main `StateGraph`: `TA_Router` → `retrieve` / `roadmap` / `teach` sub-graphs → synthesis finish nodes. Finish nodes **await** persistence (memo + state) before returning; `pending_proposal` is owned by `session.student_state`.
+- **`edu/workflow/retrieve.py`** — RAG sub-graph: `rag_core` (Milvus search) → `deep_decision` → `rag_deep` (graph-augmented retrieval).
+- **`edu/workflow/roadmap.py`** — generates and evaluates learning-path sequences against student history.
+- **`edu/workflow/teach.py`** — lesson delivery: understand intent → lookup slides → lecture/quiz → evaluate answer → advance topic.
+- **`edu/helper/prompt.py`** — all TA workflow prompt templates; changes here directly affect agent behaviour.
+- **`edu/helper/schema.py`** — Pydantic output schemas the agents must conform to (`RAGCore`, `RoadmapExplore`, `TeachLecture`, etc.).
+- **`agent/middleware.py`** — `NodeSchemaMiddleware`; dynamically swaps the active output schema based on the current LangGraph node.
 
-### `TA/api/route.py`
-Exposes the main tutoring endpoint allowing clients to post queries and receive contextual agent responses.
-- **Endpoints**:
-  - `POST /chat`: Receives user queries and session IDs, executing active tutor pipelines.
+---
 
-### `TA/edu/smart_edu.py`
-Compiles and manages the primary StateGraph compiled with LangGraph to orchestrate router, retrieve, roadmap, and teach sub-workflows.
-- **Classes & Methods**:
-  - `SmartEdu`: Compiles and executes the primary LangGraph StateGraph, consisting of:
-    - `TA_Router`: Evaluates queries and redirects flow to specialized sub-workflows.
-    - `TA_Retrieve_Finish`, `TA_Roadmap_Finish`, `TA_Teach_Finish`: Synthesis nodes that format custom tutor dialogue outputs.
-    - `Apply_Proposal`: Commits recommended pathway adjustments when approved by the student.
-    - `TA_Unknown_Finish`: Standard fallback node that guides students on how to interact with the system.
+## 5. Front-End (`FE/`)
 
-### `TA/edu/workflow/retrieve.py`
-Assembles the search retrieval workflow (`build_retrieve_wf`) to evaluate queries, trigger vector databases, and check knowledge gaps.
-- **Functions**:
-  - `build_retrieve_wf`: Compiles the retrieve sub-graph containing `RAG_Core`, `Deep_Decision`, and `rag_deep`.
-  - `rag_core` / `rag_deep`: RAG queries retrieving content and proposing bridge nodes.
-  - `deep_decision`: Evaluates if a query requires deep, multivariable context routing.
+- **`src/lib/api.ts`** — typed API client; all back-end calls are defined here.
+- **`src/contexts/AuthContext.tsx`** — global React context holding the JWT token and current user.
+- **`src/hooks/useChatPoll.ts`** — long-poll hook; submits a message and polls until a response arrives.
 
-### `TA/edu/workflow/roadmap.py`
-Assembles the roadmap workflow (`build_roadmap_wf`) to construct sequences, review current progress, and suggest pedagogical pathways.
-- **Functions**:
-  - `build_roadmap_wf`: Compiles the roadmap sub-graph containing `Roadmap_Explore`, `Roadmap_Evaluator`, and `TA_Advice`.
-  - `roadmap_explore_logic` / `roadmap_evaluator_logic`: Generate candidate sequences and evaluate them against student history.
-  - `ta_advice_logic`: Formulates advice reports and roadmap updates.
+---
 
-### `TA/edu/workflow/teach.py`
-Assembles the core lesson workflow (`build_teach_wf`) to deliver slides, reviews, quizzes, and next concept candidates.
-- **Functions**:
-  - `build_teach_wf`: Compiles the teach sub-graph containing `Teach_Understand`, `Teach_Lookup`, `Teach_RAG`, `Teach_Lecture`, `Teach_Evaluate`, and `Next_Topic`.
-  - `teach_understand`: Decides whether to lecture, review, or quiz.
-  - `teach_lookup`: Deterministically extracts relevant slide contents without using LLM calls.
-  - `teach_rag`: Fallback retrieval node if deterministic lookups return empty content.
-  - `teach_lecture`: Formulates structured lecture texts with dynamic challenge questions.
-  - `teach_evaluate` / `next_topic`: Evaluates student answers and selects candidate steps.
+## 6. Agentic Operation
 
-### `TA/tools/factory.py`
-Binds the appropriate database exploration and document extraction tools to specific agents.
-- **Classes & Methods**:
-  - `ToolFactory`: Instantiates explorer and reader tools (e.g., `EntityFinder`, `RhetoricalRetriever`, `GetPages`) for RAG and TA models.
+One chat turn flows through a single LangGraph `StateGraph`: a router classifies intent, routes to one specialised sub-graph, then a TA synthesis node turns worker output into the user-facing reply and persists it.
 
-### `TA/tracing/tracer.py`
-Tracks step-by-step reasoning outputs, records metrics, formats payload models, and exports traces to Langfuse.
-- **Classes & Methods**:
-  - `AgentTracer`: Monitors active workflows, tracks step-by-step model outputs, handles optional Langfuse callback telemetry, and writes async execution logs to JSON files.
+```mermaid
+flowchart TD
+    U([User message]) --> TM["TAModule.run<br/>build AgentState"]
+    TM -- "inject windowed history (recent N + skim)<br/>set ContextVar: session_context + tracker" --> R{"TA_Router<br/>classify intent"}
+
+    R -- retrieve --> WR["WF_Retrieve<br/>rag_core → deep_decision → rag_deep"]
+    R -- roadmap --> WM["WF_Roadmap<br/>explore ⇄ evaluate → final"]
+    R -- teaching --> WT["WF_Teach<br/>lecture / quiz / evaluate"]
+    R -- confirm --> AP["Apply_Proposal"]
+    R -- unknown --> UF["TA_Unknown_Finish"]
+
+    WR --> FR["TA_Retrieve_Finish"]
+    WM --> FM["TA_Roadmap_Finish"]
+    WT --> FT["TA_Teach_Finish"]
+
+    FR & FM & FT & AP & UF --> SY["TA agent synthesis<br/>NodeSchemaMiddleware swaps output schema per node"]
+    SY --> P[("Persist: Memo + MongoDB")]
+    P --> OUT([Response + ui_action])
+```
+
+**Three context channels feed every agent step:**
+
+```mermaid
+flowchart LR
+    subgraph PROMPT["Prompt context"]
+        H["windowed chat history + few-shot + language + prior TA reasoning"]
+    end
+    subgraph TOOLS["Tool-call context"]
+        T["recall_tool_results / recall_thoughts / inspect_chat_history<br/>read SessionContext via ContextVar"]
+    end
+    subgraph MEM["Session memory"]
+        M["SessionContext (in-mem, 10-turn: tool results + thoughts)<br/>Memo (chat history) → MongoDB"]
+    end
+    PROMPT --> AGENT(("LLM agent"))
+    AGENT --> TOOLS
+    TOOLS --> MEM
+    MEM -. persisted / recalled .-> PROMPT
+```
+
+- **Router** — lightweight raw LLM call (no tools), returns one intent token.
+- **Sub-graphs** — tool-calling agents; `NodeMiddle` injects a per-node Pydantic schema (`RAGCore`, `RoadmapExplore`, `TeachLectureOutput`) so one agent emits different structured outputs by node.
+- **Finish nodes** — the `TA` agent synthesises `TAOutput`, then memo + student state are written before the turn returns.
+
+### Context-management notes
+
+- **History bounded** — `get_formatted_history(recent_turns=N)` keeps the last N turns full, skims older turns to TA headings only. Caps tokens for small-VRAM Ollama.
+- **One chat_id end-to-end** — route `task_id` flows through `ta_module.run` → tracer → memo → Mongo, so student query + TA reply land in the same chat doc. Persistence is awaited (no fire-and-forget race / lost writes).
+- **`pending_proposal` owner** — `session.student_state`, not the graph channel. Roadmap sets it; `Apply_Proposal` / `tracker.apply_proposal` clear it.
+
+### Deferred (known limitation, not done pre-grading)
+
+- **Consolidate onto LangGraph checkpointer + reducers** as the single source of truth — would replace the manual stream-update merge in `smart_edu.execute` and collapse the SystemMessage-history / `SessionContext` / Mongo trio into one persisted state. Deferred: migration risk to already-persisted sessions.
+- **Dedupe the 4 finish nodes** (~50 repeated lines) into one helper. Pure cleanup, no runtime change.
+
+---
+
+## 7. Textbook-anchor substrate
+
+The textbook is ingested as a **primitive, deterministic anchor** before slides. It becomes an authored tree plus semantic passage units in Neo4j; concepts (born from slides, not the book) link *into* it after extraction. Three edge systems, kept logically separate:
+
+```
+STRUCTURAL      :Section -[:CONTAINS]->    :Section     (docling HierarchicalChunker; Book→Chapter→Section)
+SEMANTIC        :Section -[:HAS_PASSAGE]-> :Passage      (adjacent items merged by cosine valley cuts)
+ANCHOR          :Entity  -[:ANCHORED_IN]-> :Passage      (linked-after: batched vector ANN, no LLM)
+TEACHING GRAPH  :Entity  -[:RELATED_TO|:PREREQUISITE]-> :Entity   (slide-extracted, unchanged)
+```
+
+- `:Section` carries `title`, `level`, `order`, `p_lo/p_hi` (page span from docling `prov`).
+- `:Passage` carries `text`, `emb` (768-d), `p_lo/p_hi`, `uri` (MinIO book path) — the anchor + retrieval unit.
+- Indexes: `passage_vec_index` (vector, cosine) + `passage_text_index` (fulltext) for hybrid anchoring/retrieval.
+- All architectural forks (textbook-first, merge metric/strategy, anchor index/top-k) are toggles on `Ingest_param` in `core/config.py`.
+
+**Retrieval contract:** `get_concept_page(concept)` → `ANCHORED_IN` → `:Passage.{uri, p_lo}` → `(MinIO pdf, page)` for the front-end `FEToPage` NAVIGATE_PDF action.
+
+**graphdb.py methods:** `write_textbook_tree`, `create_tb_indexes`, `anchor_search`, `write_anchors`, `get_concept_page`, plus read helpers `passage_search` / `get_concept_anchors` / `get_passage_context` / `get_toc`. The `:Section`/`:Passage` labels are excluded from concept/learning queries via `concept_pred()` (`core/util/cypher.py`).
+
+### Planned — TA tooling over the substrate (not yet built)
+
+The substrate is currently write-only to the agents (only reader: `get_concept_page`). Planned tools to expose it: `textbook_search` (hybrid passage retrieval), `concept_anchors` (multi-citation), `read_around` (passage context), and a `CourseTree` rebuilt on the authored `:Section` tree with centrality fallback. Plan + LLM-council review captured in `HANDOFF.md` (Session 3) and `~/.claude/plans/ta-tooling-textbook.md`.
