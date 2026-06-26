@@ -30,6 +30,7 @@ class RoadmapExplore(BaseResponse):
     goal: str = Field(description="Learning goal extracted from query")
     steps: List[ConceptNode] = Field(default_factory=list, description="Ordered hub nodes for the path")
     ai_message: str = Field(default="", description="Natural language narrative for the student about this exploration")
+    raw_context: str = Field(default="", description="Captured KG tool output (course_relevance/backbone) for downstream prereq evaluation; set programmatically, not by the LLM")
 
 class RoadmapCritique(BaseResponse):
     is_feasible: bool = Field(description="Whether the proposed path is feasible for this student")

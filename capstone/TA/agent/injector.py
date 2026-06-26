@@ -37,6 +37,7 @@ class AgentInjector:
                     name=agent_name,
                 )
                 agent.model = llm_instance
+                agent.system_prompt_text = agent_prompt  ## finish nodes stream raw model, agent sys prompt bypassed
                 agents[agent_name] = agent
             else:
                 # Generator and any future raw-LLM agents

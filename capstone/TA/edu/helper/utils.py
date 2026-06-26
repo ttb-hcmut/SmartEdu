@@ -154,7 +154,7 @@ def _resolve_field_default(name: str, annotation, raw_text: str):
 
 def extract_agent_result(result: dict, schema_class: Type[_T], node_name: str) -> _T:
     """Extract structured_response from agent result dict.
-    Falls back to last message content when key is missing (agent finished without schema tool call).
+    Falls back to last message content
     """
     if "structured_response" in result:
         return result["structured_response"]
@@ -200,6 +200,47 @@ def compact_explore(raw_tool_output: str) -> str:
     if not raw_tool_output:
         return ""
     return raw_tool_output[:2500] + "\n...(truncated)" if len(raw_tool_output) > 2500 else raw_tool_output
+
+
+# KG tools whose observations carry the prerequisite/structure signal the Evaluator needs.
+# Ordered by priority so the most decision-relevant output survives the context cap.
+_KG_CONTEXT_TOOLS = ("course_relevance", "course_backbone", "recommend_new")
+
+
+def extract_kg_context(messages: list, cap: int = 8096) -> str:
+    """Pull KG tool observations from a RAG agent trace into a single string for the
+    Roadmap_Evaluator prompt.
+
+    Without this the tool output dies in the agent's intermediate messages and the
+    Evaluator gets an empty ``course_relevance`` — the prereq check then runs blind.
+
+    ``cap`` bounds total length (default 8096 chars) so a large backbone dump can't
+    blow the downstream context window; course_relevance is emitted first so the
+    prereq signal is the last thing dropped on truncation.
+    """
+    if not messages:
+        return ""
+
+    collected = {name: [] for name in _KG_CONTEXT_TOOLS}
+    for i, msg in enumerate(messages):
+        for tool_call in getattr(msg, "tool_calls", None) or []:
+            name = tool_call.get("name")
+            if name not in collected:
+                continue
+            nxt = messages[i + 1] if i + 1 < len(messages) else None
+            if nxt is not None and getattr(nxt, "type", "") == "tool" \
+               and getattr(nxt, "tool_call_id", None) == tool_call.get("id"):
+                collected[name].append(str(nxt.content))
+
+    chunks = []
+    for name in _KG_CONTEXT_TOOLS:
+        for obs in collected[name]:
+            chunks.append(f"[{name}]\n{obs}")
+
+    joined = "\n\n".join(chunks)
+    if len(joined) > cap:
+        return joined[:cap] + "\n...(truncated)"
+    return joined
 
 
 def filter_mastery(roadmap_data: dict, mastery_map: dict) -> dict:

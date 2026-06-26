@@ -124,8 +124,9 @@ class AgentTracer:
 
     # ── Chat lifecycle ────────────────────────────────────────────────────
 
-    def begin_chat(self, query: str) -> str:
-        chat_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ## chat_id passed -> reuse caller id (align trace/memo/mongo). else datetime.
+    def begin_chat(self, query: str, chat_id: Optional[str] = None) -> str:
+        chat_id = chat_id or datetime.now().strftime("%Y%m%d_%H%M%S")
         chat = ChatTrace(chat_id=chat_id, query=query)
         self._active_chats[chat_id] = chat
         logger.debug(f"[AgentTracer] begin_chat: session={self.session_id} chat_id={chat_id}")

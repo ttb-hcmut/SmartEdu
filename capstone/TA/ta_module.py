@@ -1,12 +1,17 @@
 from TA.agent.injector import AgentInjector
 from TA.tools.factory import ToolFactory
-from TA.tools.context_tools import _current_session_context, _current_tracker
+from TA.tools.student.context_tools import _current_session_context, _current_tracker
 from TA.edu.smart_edu import SmartEdu
 from TA.tracing import AgentTracer
 from langchain_core.messages import HumanMessage, SystemMessage, BaseMessage, AIMessage
 from core.schema.wf_state import AgentState, TAOutput
 from student.Student_Tracker import Student_Tracker
+from student.memo import Chat, ChatMessage
+from collections import OrderedDict
+from datetime import datetime
 import asyncio
+
+RECENT_TURNS = 4  # last N turns full, older skim
 
 
 class TAModule:
@@ -23,32 +28,53 @@ class TAModule:
             teach_tools=self.tools_factory.get_teach_lookup_tools(),
         )
 
-        # Cache tracer per session_id — reuse across turns trong cùng chat session
-        self._tracers: dict[str, AgentTracer] = {}
+        # tracer per session, LRU bound -> no unbounded leak
+        self._tracers: "OrderedDict[str, AgentTracer]" = OrderedDict()
+        self._max_tracers = 100
 
     def _get_tracer(self, session_id: str) -> AgentTracer:
-        """Lấy hoặc tạo mới AgentTracer cho chat session."""
-        if session_id not in self._tracers:
-            self._tracers[session_id] = AgentTracer(session_id=session_id)
-        return self._tracers[session_id]
+        tracer = self._tracers.get(session_id)
+        if tracer is None:
+            tracer = AgentTracer(session_id=session_id)
+            self._tracers[session_id] = tracer
+            while len(self._tracers) > self._max_tracers:
+                self._tracers.popitem(last=False)  # evict oldest
+        else:
+            self._tracers.move_to_end(session_id)
+        return tracer
 
-    async def run(self, 
-                    user_input: str, 
-                    session_id: str, 
+    async def run(self,
+                    user_input: str,
+                    session_id: str,
                     update_callback=None,
-                    language: str = "vn"):
+                    language: str = "vn",
+                    chat_id: str = "",
+                    emit=None):
 
         session = self.student_tracker.get_session(session_id)
         tracer = self._get_tracer(session_id)
 
-        chat_id = tracer.begin_chat(query=user_input)
+        ## reuse route chat_id -> trace/memo/mongo share one id
+        chat_id = tracer.begin_chat(query=user_input, chat_id=chat_id or None)
 
         # Bug 3 fix: use session.context directly (loaded from MongoDB on session init)
         student_id = self.student_tracker._resolve(session_id)
         session_context = session.context
 
-        history_str = session.memo.get_formatted_history()
+        history_str = session.memo.get_formatted_history(recent_turns=RECENT_TURNS)
         student_state = session.student_state
+
+        ## mirror student msg into in-mem memo (mongo gets it via route.create_chat); same chat_id so TA reply appends here
+        memo_chats = session.memo.session.chats
+        if not any(c.id == chat_id for c in memo_chats):
+            memo_chats.append(Chat(
+                id=chat_id,
+                invoke=user_input,
+                messages=[ChatMessage(
+                    role="student", heading="Student Query",
+                    message=user_input, timestamp=datetime.utcnow().isoformat(),
+                )],
+            ))
 
         initial_state: AgentState = {
             "messages": [
@@ -81,7 +107,8 @@ class TAModule:
                 chat_id=chat_id,
                 tracer=tracer,
                 callbacks=callbacks,
-                update_callback=update_callback
+                update_callback=update_callback,
+                emit=emit
             )
         finally:
             _current_session_context.reset(_ctx_token)

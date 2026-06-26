@@ -25,7 +25,6 @@ from TA.edu.helper.schema import (
     RoadmapExplore,
     TeachLectureOutput,
 )
-from core.schema.wf_state import TAOutput
 
 class _NodeSchemaState(_MiddlewareAgentState):
     """ 
@@ -48,7 +47,7 @@ class NodeMiddle(AgentMiddleware):
 
     state_schema = _NodeSchemaState
 
-    ## -- Tool nodes: need ToolStrategy to allow intermediate tool calling
+    ## TA_*_Finish absent on purpose, stream plain text not structured
     TOOL_NODE_SCHEMAS = {
         # RAG agent nodes
         "RAG_Core": RAGCore,
@@ -56,10 +55,6 @@ class NodeMiddle(AgentMiddleware):
         "Roadmap_Explore": RoadmapExplore,
         # TA agent nodes
         "Teach_Lecture": TeachLectureOutput,
-        "TA_Retrieve_Finish": TAOutput,
-        "TA_Teach_Finish": TAOutput,
-        "TA_Roadmap_Finish": TAOutput,
-        "TA_Unknown_Finish": TAOutput,
     }
 
     async def awrap_model_call(

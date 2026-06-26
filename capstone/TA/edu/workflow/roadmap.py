@@ -7,7 +7,7 @@ from core.schema.wf_state import AgentState
 from TA.edu.helper.schema import RoadmapExplore, RoadmapCritique, RoadmapFinal
 from TA.edu.helper.prompt import ROADMAP_PROMPT
 from TA.edu.helper.few_shot import get_language_instruction
-from TA.edu.helper.utils import filter_mastery, safe_parse_structured, extract_llm_raw_text, extract_agent_result
+from TA.edu.helper.utils import filter_mastery, safe_parse_structured, extract_llm_raw_text, extract_agent_result, extract_kg_context
 from TA.edu.helper.context import extract_ta_context
 
 
@@ -16,6 +16,9 @@ import os
 
 logger = logging.getLogger(__name__)
 
+# Cap on explore→evaluate cycles. 2 = one initial pass + one infeasibility retry.
+MAX_ROADMAP_ATTEMPTS = 2
+
 
 def _explore_router(state: AgentState):
     wr = state.get("worker_results", {})
@@ -23,6 +26,24 @@ def _explore_router(state: AgentState):
     if not r.get("steps") and not (r.get("goal") or "").strip():
         return END
     return "Roadmap_Evaluator"
+
+
+def _evaluator_router(state: AgentState):
+    """Close the loop: an infeasible verdict reruns Explore (where the KG tools live)
+    instead of being narrated around by TA_Advice. Capped by MAX_ROADMAP_ATTEMPTS.
+
+    ``is_feasible is not True`` deliberately catches a None left by a parse-fallback
+    critique — an unknown verdict is treated as "not yet feasible" and retried, not
+    silently shipped as final.
+    """
+    r = state.get("worker_results", {}).get("Roadmap", {})
+    critique = r.get("critique", {})
+    is_feasible = critique.get("is_feasible") if isinstance(critique, dict) else None
+    attempts = state.get("roadmap_attempts", 0)
+
+    if is_feasible is not True and attempts < MAX_ROADMAP_ATTEMPTS:
+        return "Roadmap_Explore"
+    return "TA_Advice"
 
 
 def build_roadmap_wf(agents):
@@ -43,7 +64,7 @@ def build_roadmap_wf(agents):
 
     builder.set_entry_point("Roadmap_Explore")
     builder.add_conditional_edges("Roadmap_Explore", _explore_router)
-    builder.add_edge("Roadmap_Evaluator", "TA_Advice")
+    builder.add_conditional_edges("Roadmap_Evaluator", _evaluator_router)
     builder.add_edge("TA_Advice", END)
 
     return builder.compile()
@@ -71,12 +92,45 @@ async def roadmap_explore_logic(state: AgentState, rag_agent, config):
                 student_query=query
             )
         else:
+            ## prepend frontier render when course tree + learning tree are cached
+            tree_block = ""
+            try:
+                c = config.get("configurable", {})
+                mongo = c.get("mongo_db")
+                uid = c.get("student_id") or c.get("session_id", "")
+                course = getattr(current_pos, "course_name", "") or ""
+                if mongo and course:
+                    cached = mongo.get_course_tree(course.title())
+                    lt = mongo.get_learning_tree(uid, course)
+                    if cached.get("tree"):
+                        from TA.edu.helper.tree_render import render_frontier
+                        learning = {n["name"]: n for n in lt.get("nodes", [])}
+                        tree_block = render_frontier(cached["tree"], learning,
+                                                     current_pos.name, char_budget=1800)
+            except Exception as e:
+                logger.warning(f"[roadmap_explore_logic] render skipped: {e}")
             instruction = ROADMAP_PROMPT['explore_existing'].format(
                 language_instruction=language_instruction,
                 current_pos=current_pos.name if hasattr(current_pos, 'name') else str(current_pos),
                 student_query=query
             )
+            if tree_block:
+                instruction = f"[Student's learning tree]\n{tree_block}\n\n{instruction}"
 
+        current_results = state.get("worker_results", {})
+
+        ##    back in so re-exploration corrects the gap instead of repeating it.
+        prior_critique = current_results.get("Roadmap", {}).get("critique") or {}
+        if prior_critique.get("is_feasible") is False:
+            gap = prior_critique.get("thought") or prior_critique.get("ai_message") or ""
+            if gap:
+                instruction = (
+                    f"[Previous roadmap was judged INFEASIBLE]:\n{gap}\n\n"
+                    f"Revise the path to address this — favour prerequisite/foundation nodes "
+                    f"the student is missing.\n\n{instruction}"
+                )
+
+        raw_context = ""
         try:
             result = await rag_agent.ainvoke(
                 {"messages": [("user", instruction)], "current_node": "Roadmap_Explore"},
@@ -87,7 +141,14 @@ async def roadmap_explore_logic(state: AgentState, rag_agent, config):
             structured = safe_parse_structured(extract_llm_raw_text(e), RoadmapExplore)
         else:
             structured = extract_agent_result(result, RoadmapExplore, "roadmap_explore_logic")
-        
+            ## -- Capture KG tool output (course_relevance/backbone) from the agent trace.
+            ##    It dies in intermediate messages otherwise, leaving the Evaluator blind.
+            raw_context = extract_kg_context(result.get("messages", []))
+
+        ## -- raw_context is set programmatically (the LLM never fills it); fall back to
+        ##    any value the agent happened to emit so a retry doesn't clobber prior capture.
+        structured.raw_context = raw_context or structured.raw_context
+
         report_lines = [
             f"========================= Agent \"{rag_agent.name}\" Runtime Report ==========================",
             f"[SMART_EDU_LOG] Node: Roadmap_Explore | Action: global_agent.ainvoke | Time: {time.time() - start:.4f}s",
@@ -110,13 +171,18 @@ async def roadmap_explore_logic(state: AgentState, rag_agent, config):
             }
             AgentTracer.logging(log_dict, type="info", file_name=log_filename)
 
-        current_results = state.get("worker_results", {})
-
-        return {
+        ## -- Empty explore: no steps and no goal means the router will END here.
+        ##    Flag it so the dead-end carries a reason instead of failing silently.
+        is_empty = not structured.steps and not (structured.goal or "").strip()
+        out = {
             "worker_results": {**current_results, "Roadmap": structured.model_dump()},
             "messages": [{"role": "assistant", "content": structured.ai_message}],
-            "status_flag": "SUCCESS",
+            "status_flag": "EMPTY" if is_empty else "SUCCESS",
         }
+        if is_empty:
+            out["error"] = "roadmap_explore_empty: no hub nodes matched in the knowledge graph"
+            logger.warning("[roadmap_explore_logic] Empty exploration — routing to END with error flag.")
+        return out
     except Exception as e:
         if log_filename:
             AgentTracer.logging(traceback.format_exc(), type="err", file_name=log_filename)
@@ -166,6 +232,9 @@ async def roadmap_evaluator_logic(state: AgentState, ta_agent, config: RunnableC
     return {
         "worker_results": {**current_results, "Roadmap": updated_roadmap},
         "messages": [{"role": "assistant", "content": critique.ai_message}],
+        ## -- Bumped here (not in the router, which can't mutate state) so the
+        ##    explore→evaluate loop is bounded by MAX_ROADMAP_ATTEMPTS.
+        "roadmap_attempts": state.get("roadmap_attempts", 0) + 1,
     }
 
 
@@ -175,7 +244,9 @@ async def ta_advice_logic(state: AgentState, ta_agent, config: RunnableConfig):
     roadmap_data = current_results.get("Roadmap", {})
     critique = roadmap_data.get("critique", {})
 
-    critique_str = f"Feasible: {critique.get('is_feasible')}\nReasoning: {critique.get('reasoning')}"
+    ## -- 'thought' is the real reasoning field on RoadmapCritique; 'reasoning' never
+    ##    existed on the schema and always piped "None" into this prompt.
+    critique_str = f"Feasible: {critique.get('is_feasible')}\nReasoning: {critique.get('thought')}"
 
     language = state.get("language", "vn")
     language_instruction = get_language_instruction(language)
@@ -212,6 +283,19 @@ async def ta_advice_logic(state: AgentState, ta_agent, config: RunnableConfig):
         }, type="info", file_name=log_filename)
 
     updated_roadmap = {**roadmap_data, "advice": advice.model_dump()}
+
+    ## seed Mongo learning tree from final backbone (ADR-0003); never kills the reply
+    try:
+        c = config.get("configurable", {})
+        mongo = c.get("mongo_db")
+        uid = c.get("student_id") or c.get("session_id", "")
+        course = (advice.final_steps[0].course_name if advice.final_steps else "") or ""
+        if mongo and uid and course:
+            mongo.seed_learning_tree(uid, course,
+                                     [{"name": n.name, "type": n.type} for n in advice.final_steps])
+    except Exception as seed_err:
+        logger.warning(f"[ta_advice_logic] learning-tree seed skipped: {seed_err}")
+
     return {
         "worker_results": {**current_results, "Roadmap": updated_roadmap},
         "messages": [{"role": "assistant", "content": advice.ai_message}],

@@ -1,7 +1,9 @@
 import asyncio
+import json
 import logging
 import uuid
 from fastapi import APIRouter, Request, HTTPException, Depends
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from student.auth import get_current_student, User
@@ -57,6 +59,11 @@ def _get_session_id(payload: ChatRequest, request: Request, current_student: Use
 
 
 async def _run_ta_task(app_state, task_id: str, user_input: str, session_id: str, language: str = "vn"):
+    queue: asyncio.Queue = app_state.ta_tasks[task_id]["queue"]
+
+    async def emit(event: dict):
+        await queue.put(event)
+
     async def update_status(node_name: str, state_update: dict):
         current_status = app_state.ta_tasks.get(task_id, {})
         app_state.ta_tasks[task_id] = {
@@ -69,13 +76,14 @@ async def _run_ta_task(app_state, task_id: str, user_input: str, session_id: str
 
     try:
         ta_module = app_state.TA
-        result = await ta_module.run(user_input=user_input, session_id=session_id, update_callback=update_status, language=language)
+        result = await ta_module.run(user_input=user_input, session_id=session_id, update_callback=update_status, language=language, chat_id=task_id, emit=emit)
         current_status = app_state.ta_tasks.get(task_id, {})
         app_state.ta_tasks[task_id] = {
             **current_status,
             "status": "finished",
             "result": {"message": result["message"], "ui_action": result.get("ui_action")},
         }
+        await emit({"type": "done", "message": result["message"], "ui_action": result.get("ui_action")})
         logger.info("TA task %s completed successfully.", task_id)
     except Exception:
         logger.exception("TA background task %s failed.", task_id)
@@ -85,6 +93,7 @@ async def _run_ta_task(app_state, task_id: str, user_input: str, session_id: str
             "status": "Fail",
             "error": "Internal TA workflow error — check server logs.",
         }
+        await emit({"type": "error", "error": "Internal TA workflow error — check server logs."})
 
 
 @router.post("/chat", response_model=ChatAcceptedResponse, status_code=202)
@@ -110,8 +119,13 @@ async def chat_with_ta(
         chat_id = task_id  # They are the same
         tracker.mongodb.create_chat(current_student.id, session_id, chat_id, payload.user_input)
 
-        # Mark as processing before scheduling so the status endpoint never sees a missing key
-        request.app.state.ta_tasks[task_id] = {"status": "working", "agent_name": "TA_Router (Thinking...)"}
+        # Mark as processing before scheduling so the status endpoint never sees a missing key.
+        # Queue created here (not in the task) so /chat/stream never races a missing queue.
+        request.app.state.ta_tasks[task_id] = {
+            "status": "working",
+            "agent_name": "TA_Router (Thinking...)",
+            "queue": asyncio.Queue(),
+        }
 
         asyncio.create_task(
             _run_ta_task(request.app.state, task_id, payload.user_input, session_id, payload.language)
@@ -159,3 +173,36 @@ async def get_chat_status(task_id: str, request: Request, _: User = Depends(get_
         )
     # error
     return ChatStatusResponse(task_id=task_id, status="Fail", error=entry.get("error"))
+
+
+@router.get("/chat/stream/{task_id}")
+async def stream_chat(task_id: str, request: Request, _: User = Depends(get_current_student)):
+    """
+    SSE stream of a submitted /chat task: `step` (progress) + `token` (answer text),
+    terminated by `done` (full message + ui_action) or `error`.
+    Auth via Bearer header — the client uses fetch+reader, not EventSource (which can't set headers).
+    """
+    entry = request.app.state.ta_tasks.get(task_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Task '{task_id}' not found.")
+    queue: asyncio.Queue = entry.get("queue")
+    if queue is None:
+        raise HTTPException(status_code=409, detail="Task has no active stream.")
+
+    async def gen():
+        while True:
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=180)
+            except asyncio.TimeoutError:
+                ## graph hung; bail so the generator never zombies
+                yield f"data: {json.dumps({'type': 'error', 'error': 'TA timed out.'})}\n\n"
+                return
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            if event.get("type") in ("done", "error"):
+                return
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},  ## X-Accel disables proxy buffering
+    )
