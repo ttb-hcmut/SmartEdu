@@ -5,8 +5,6 @@ import { useAuth } from "@/contexts/AuthContext"
 import { normaliseUiAction, type UiAction } from "@/lib/normalise"
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000"
-const INTERVALS = [3_000, 5_000, 10_000] // ms — escalating poll cadence
-const TIMEOUT_MS = 300_000               // 5 min hard timeout
 
 export type PollState = "idle" | "polling" | "done" | "fail" | "timeout"
 
@@ -27,75 +25,88 @@ export function useChatPoll() {
   const [result, setResult] = useState<PollResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [thought, setThought] = useState<AgentThought | null>(null)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const startTimeRef = useRef<number>(0)
+  const [partial, setPartial] = useState<string>("") // live answer text as tokens stream
+  const abortRef = useRef<AbortController | null>(null)
 
-  function clearTimer() {
-    if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = null
-  }
+  const reset = useCallback(() => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    setState("idle")
+    setResult(null)
+    setError(null)
+    setThought(null)
+    setPartial("")
+  }, [])
 
-  const poll = useCallback(
-    async (taskId: string, attemptIdx: number) => {
-      if (Date.now() - startTimeRef.current >= TIMEOUT_MS) {
-        setState("timeout")
-        return
-      }
+  const streamTask = useCallback(
+    async (taskId: string) => {
+      const ctrl = new AbortController()
+      abortRef.current = ctrl
+      let acc = ""
 
       try {
-        const res = await apiFetch(
-          `${API}/system/v0/ta/chat/status/${taskId}`
-        )
-        if (!res.ok) {
+        const res = await apiFetch(`${API}/system/v0/ta/chat/stream/${taskId}`, {
+          signal: ctrl.signal,
+          headers: { Accept: "text/event-stream" },
+        })
+        if (!res.ok || !res.body) {
           setState("fail")
-          setError(`Server responded with ${res.status}`)
+          setError(`Stream failed (${res.status})`)
           return
         }
 
-        const data = await res.json()
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buf = ""
 
-        if (data.status === "working") {
-          if (data.agent_name || data.thought) {
-            setThought({
-              agentName: data.agent_name,
-              intent: data.intent,
-              thought: data.thought,
-            })
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buf += decoder.decode(value, { stream: true })
+
+          // SSE frames are separated by a blank line
+          let sep
+          while ((sep = buf.indexOf("\n\n")) !== -1) {
+            const frame = buf.slice(0, sep)
+            buf = buf.slice(sep + 2)
+            const line = frame.split("\n").find((l) => l.startsWith("data:"))
+            if (!line) continue
+
+            const evt = JSON.parse(line.slice(5).trim())
+            if (evt.type === "step") {
+              setThought({ thought: evt.label, agentName: "TA Agent" })
+            } else if (evt.type === "token") {
+              acc += evt.text
+              setPartial(acc)
+            } else if (evt.type === "done") {
+              setResult({
+                message: evt.message ?? acc,
+                uiAction: normaliseUiAction(evt.ui_action ?? null),
+              })
+              setThought(null)
+              setState("done")
+              return
+            } else if (evt.type === "error") {
+              setState("fail")
+              setError(evt.error ?? "TA workflow failed.")
+              return
+            }
           }
-          const delay = INTERVALS[Math.min(attemptIdx, INTERVALS.length - 1)]
-          timerRef.current = setTimeout(() => poll(taskId, attemptIdx + 1), delay)
-          return
         }
 
-        if (data.status === "finished" || data.result) {
-          const r = data.result ?? data
-          const message: string = r.message || r.summary || ""
-          if (!message) {
-            setState("fail")
-            setError("Trợ lý không tạo được câu trả lời. Vui lòng thử lại.")
-            return
-          }
-          setResult({
-            message,
-            uiAction: normaliseUiAction(r.ui_action ?? null),
-          })
+        // Stream closed without a terminal event — salvage accumulated text
+        if (acc) {
+          setResult({ message: acc, uiAction: null })
           setThought(null)
           setState("done")
-          return
-        }
-
-        if (data.status === "Fail" || data.status === "failed") {
+        } else {
           setState("fail")
-          setError(data.error ?? "TA workflow failed.")
-          return
+          setError("Stream ended unexpectedly.")
         }
-
-        // Unknown status — keep polling
-        const delay = INTERVALS[Math.min(attemptIdx, INTERVALS.length - 1)]
-        timerRef.current = setTimeout(() => poll(taskId, attemptIdx + 1), delay)
       } catch (err) {
+        if ((err as Error)?.name === "AbortError") return
         setState("fail")
-        setError(err instanceof Error ? err.message : "Polling error")
+        setError(err instanceof Error ? err.message : "Streaming error")
       }
     },
     [apiFetch]
@@ -104,12 +115,12 @@ export function useChatPoll() {
   const submit = useCallback(
     async (userInput: string) => {
       if (!sessionId) return
-      clearTimer()
+      abortRef.current?.abort()
       setState("polling")
       setResult(null)
       setError(null)
       setThought(null)
-      startTimeRef.current = Date.now()
+      setPartial("")
 
       try {
         const res = await apiFetch(`${API}/system/v0/ta/chat`, {
@@ -129,23 +140,14 @@ export function useChatPoll() {
         }
 
         const { task_id } = await res.json()
-        // First poll after the initial interval
-        timerRef.current = setTimeout(() => poll(task_id, 0), INTERVALS[0])
+        await streamTask(task_id)
       } catch (err) {
         setState("fail")
         setError(err instanceof Error ? err.message : "Failed to send message")
       }
     },
-    [apiFetch, sessionId, language, poll]
+    [apiFetch, sessionId, language, streamTask]
   )
 
-  function reset() {
-    clearTimer()
-    setState("idle")
-    setResult(null)
-    setError(null)
-    setThought(null)
-  }
-
-  return { state, result, error, thought, submit, reset }
+  return { state, result, error, thought, partial, submit, reset }
 }
