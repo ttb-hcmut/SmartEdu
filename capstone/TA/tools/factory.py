@@ -1,8 +1,9 @@
 from typing import List, Dict
 from TA.tools.neo.retriever import EntityFinder, RhetoricalRetriever, EdgeExplorer, SemanticSearch
 from TA.tools.neo.explore import RecommendNew, CourseBackbone, CourseRelevance, OptimalPath
+from TA.tools.neo.course_tree import CourseTree
 from TA.tools.minio.pdf_tools import GetConcept, GetPages, FEToPage
-from TA.tools.context_tools import RecallToolResults, RecallThoughts, InspectChatHistory
+from TA.tools.student.context_tools import RecallToolResults, RecallThoughts, InspectChatHistory
 
 from core.repo.graph.graphdb import GraphDB
 
@@ -28,6 +29,8 @@ class ToolFactory:
             EdgeExplorer(engine=self.graph_db, tracker=self.tracker),
             RecommendNew(engine=self.graph_db, tracker=self.tracker),
             CourseBackbone(engine=self.graph_db, tracker=self.tracker),
+            CourseTree(engine=self.graph_db, tracker=self.tracker,
+                       mongo=self.tracker.mongodb if self.tracker else None),
             CourseRelevance(engine=self.graph_db, tracker=self.tracker),
             OptimalPath(engine=self.graph_db, tracker=self.tracker),
             SemanticSearch(milvus_db=self.milvus_db, embedder=self.embedder)

@@ -32,6 +32,12 @@ class RelevanceInput(BaseModel):
     target_course: str = Field(description="Name of the target course to find dependencies for.")
     min_degree: int = Field(default=3, description="Minimum out-degree threshold to qualify as a hub node.")
 
+class CourseTreeInput(BaseModel):
+    course_name: str = Field(description="Course/community name to build the backbone tree for.")
+    max_per_topic: int = Field(default=5, description="Main concepts kept per topic.")
+    max_orphans: int = Field(default=5, description="Topic-less concepts attached directly to the course root.")
+    force_rebuild: bool = Field(default=False, description="Bypass the cached tree.")
+
 # --- TOOL OUTPUT SCHEMAS ---
 
 
