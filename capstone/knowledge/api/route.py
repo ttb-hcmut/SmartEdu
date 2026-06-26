@@ -9,12 +9,11 @@ from student.auth import require_admin, get_current_student, User
 router = APIRouter(tags=["Knowledge"])
 
 
-# ─────────────────────────────────────────────
-# schemas
-# ─────────────────────────────────────────────
+######### schemas
+
 class CourseIngestionRequest(BaseModel):
     course_name: str = "Machine Learning"
-    slide_files: List[str]                         # filenames already PUT into minio staging (course/_raw/...)
+    slide_files: List[str]                         # finished files
     textbook_files: List[str]
     reset: bool = True
 
@@ -33,16 +32,14 @@ class UploadUrlResponse(BaseModel):
     targets: List[PresignedTarget]
 
 
-# ─────────────────────────────────────────────
-# upload: hand the browser presigned PUT urls (admin only)
-# ─────────────────────────────────────────────
+######### upload: hand the browser presigned PUT urls (admin only)
+
 @router.post("/upload-url", response_model=UploadUrlResponse)
 async def get_upload_urls(
     req: UploadUrlRequest,
     service=Depends(get_ingestion_service),
     _: User = Depends(require_admin),
 ):
-    # one presigned url per file; browser uploads direct to minio, skipping the proxy size limit
     targets = []
     for fn in req.file_names:
         if not fn.lower().endswith(".pdf"):
@@ -52,9 +49,8 @@ async def get_upload_urls(
     return UploadUrlResponse(targets=targets)
 
 
-# ─────────────────────────────────────────────
-# ingest: process the already-uploaded pdfs (admin only)
-# ─────────────────────────────────────────────
+######### ingest: process the already-uploaded pdfs (admin only)
+
 @router.post("/ingest-course")
 async def ingest_course(
     req: CourseIngestionRequest,
@@ -77,9 +73,8 @@ async def ingest_course(
     }
 
 
-# ─────────────────────────────────────────────
-# discovery + viewer (any logged-in student)
-# ─────────────────────────────────────────────
+######### discovery + viewer (any logged-in student)
+
 @router.get("/courses")
 async def list_courses(
     service=Depends(get_ingestion_service),

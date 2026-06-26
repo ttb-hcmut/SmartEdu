@@ -1,9 +1,7 @@
 from knowledge.service.course_ingest import CourseIngestionService
 from core.dependencies import *
-from core.config import K_conf
-
 class KnowledgeModule:
-    def __init__(self, llm, graph_db, milvus_db, embedder, minio_repo, config =K_conf ):
+    def __init__(self, llm, graph_db, milvus_db, embedder, minio_repo ):
         self.llm = llm
         self.graph_db = graph_db
         self.milvus_db = milvus_db

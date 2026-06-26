@@ -14,12 +14,13 @@ except ImportError:
 
 # Logic
 from core.schema.graph.graph import KG_Instance
-from core.util.file_extractor import extract_pdf
+from core.util.file_extractor import extract_pdf, extract_tree
 from core.repo.graph.insert import serialize_kg_to_dict
 from core.schema.graph.type import Ref
 from core.repo.storage.minio_repo import make_topic_name
 from knowledge.engine.extract import GraphExtractionService
 from knowledge.engine.graph.graph_constructor import KG_Handler
+from knowledge.engine.graph.helper.semantic_merge import group_passages
 
 #shared
 from core.dependencies import * 
@@ -150,7 +151,53 @@ class CourseIngestionService:
 
 
 
-    async def _process_textbook(self,name: str, course_name, num_workers: int = 3):
+    async def _process_textbook(self, name: str, course_name):
+        ## textbook = primitive anchor: build :Section tree + :Passage units, no LLM
+        raw_obj = self.minio_repo.raw_object_name(course_name, name)
+        file_bytes = await asyncio.to_thread(self.minio_repo.get_object_bytes, raw_obj)
+        tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        tmp.write(file_bytes)
+        tmp.close()
+        try:
+            tree = await asyncio.to_thread(extract_tree, tmp.name)
+        finally:
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass
+
+        if not tree.get("items"):
+            return
+
+        passages = await asyncio.to_thread(
+            group_passages, tree["items"], self.embedder.get_embedding, self.config
+        )
+        await asyncio.to_thread(
+            self.graph_db.write_textbook_tree,
+            tree["sections"], passages, raw_obj, self.db_name, Emb_conf().dim
+        )
+
+    async def _anchor_concepts(self, concept_nodes: List[Dict]):
+        ## linked-after: each taught concept -> passage by vector ANN, one batched write
+        seen, links = set(), []
+        for c in concept_nodes:
+            name = c.get("name")
+            if not name or name.lower() in seen:
+                continue
+            seen.add(name.lower())
+            text = f"{name}. {c.get('content', '')}".strip()
+            emb = await asyncio.to_thread(self.embedder.get_embedding, text)
+            hits = await asyncio.to_thread(
+                self.graph_db.anchor_search, emb, self.config.anchor_top_k, self.db_name
+            )
+            for h in hits:
+                if h.get("score", 0) >= self.config.anchor_score_min:
+                    links.append({"entity_name": name, "passage_id": h["passage_id"],
+                                  "score": h["score"], "justification": ""})
+        if links:
+            await asyncio.to_thread(self.graph_db.write_anchors, links, self.db_name)
+
+    async def _process_textbook_legacy(self, name: str, course_name, num_workers: int = 3):
         # pull raw textbook from minio staging, temp-file for docling, then remove
         raw_obj = self.minio_repo.raw_object_name(course_name, name)
         file_bytes = await asyncio.to_thread(self.minio_repo.get_object_bytes, raw_obj)
@@ -213,20 +260,34 @@ class CourseIngestionService:
         if req.reset:
             self.reset_db()
 
+        # textbook first: build the anchor substrate before slides
+        if self.config.textbook_first and req.textbook_files:
+            await asyncio.gather(*[
+                self._process_textbook(f, req.course_name) for f in req.textbook_files
+            ])
+
+        # slides -> taught concepts
         results = await asyncio.gather(*[
             self._process_slide(f, req.course_name) for f in req.slide_files
         ])
 
+        concept_nodes = []
         for res in results:
             if res is None:
                 continue
             nodes, edges, clusters = res
             self.graph_db.import_data(db_name=self.db_name, nodes=nodes, edges=edges, clusters=clusters)
             self.milvus_db.insert_data(nodes=nodes, embedder=self.embedder)
+            concept_nodes += [n for n in nodes if n.get("typeNode") == "Concept"]
 
-        await asyncio.gather(*[
-            self._process_textbook(f, req.course_name) for f in req.textbook_files
-        ])
+        # anchor concepts into passages, or fall back to legacy link-after
+        if self.config.textbook_first:
+            if req.textbook_files:
+                await self._anchor_concepts(concept_nodes)
+        else:
+            await asyncio.gather(*[
+                self._process_textbook_legacy(f, req.course_name) for f in req.textbook_files
+            ])
 
         print(f" ====>  All finished and takes {time()-start}")
 
